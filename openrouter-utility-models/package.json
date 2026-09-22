@@ -1,0 +1,8 @@
+{
+  "name": "pi-openrouter-utility-models",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test catalog.test.ts extension.test.ts"
+  }
+}

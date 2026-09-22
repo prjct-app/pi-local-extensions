@@ -1,0 +1,33 @@
+{
+  "name": "palette-themes",
+  "private": true,
+  "piBuild": {
+    "copy": [
+      "themes"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "themes": [
+      "./themes/agent.json",
+      "./themes/debug.json",
+      "./themes/deploy.json",
+      "./themes/exception.json",
+      "./themes/flux.json",
+      "./themes/kernel.json",
+      "./themes/legacy.json",
+      "./themes/merge.json",
+      "./themes/neural.json",
+      "./themes/pipeline.json",
+      "./themes/production.json",
+      "./themes/refactor.json",
+      "./themes/synapse.json",
+      "./themes/syntax.json",
+      "./themes/tensor.json",
+      "./themes/token.json",
+      "./themes/vector.json"
+    ]
+  }
+}
