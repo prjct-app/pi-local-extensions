@@ -1,6 +1,8 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, type Component, type Focusable, type TUI } from "@earendil-works/pi-tui";
 import { fit } from "@prjct.app/pi-tui-kit";
+import { readFavorites, toggleFavorite } from "./favorites.ts";
+import { groupedPalettes, groupOf, orderedPalettes } from "./palette-groups.ts";
 import { PALETTES, paintChip, type Palette } from "./palettes.ts";
 
 type Pane = "browser" | "detail";
@@ -17,11 +19,22 @@ function palettePanels(
 	originalTheme: string | undefined,
 	done: (value: string | undefined) => void,
 ): Component & Focusable & { dispose(): void } {
-	const initial = Math.max(0, PALETTES.findIndex((palette) => palette.id === ctx.ui.theme.name));
-	const state = { selected: initial, focus: "browser" as Pane, notice: "", applied: false, closed: false };
+	let favorites: Set<string>;
+	let loadError = "";
+	try { favorites = readFavorites(); }
+	catch (error) {
+		favorites = new Set();
+		loadError = `Favorites unavailable: ${error instanceof Error ? error.message : String(error)}`;
+	}
+	const state = {
+		selected: ctx.ui.theme.name && PALETTES.some((palette) => palette.id === ctx.ui.theme.name)
+			? ctx.ui.theme.name : PALETTES[0]!.id,
+		focus: "browser" as Pane, notice: loadError, applied: false, closed: false,
+	};
 	const accent = (text: string): string => theme.fg("accent", text);
 	const dim = (text: string): string => theme.fg("dim", text);
-	const current = (): Palette => PALETTES[state.selected]!;
+	const rows = () => groupedPalettes(favorites);
+	const current = (): Palette => PALETTES.find((palette) => palette.id === state.selected)!;
 	const request = (): void => { if (!state.closed) tui.requestRender(); };
 	const restore = (): void => {
 		if (originalTheme && ctx.ui.theme.name !== originalTheme) ctx.ui.setTheme(originalTheme);
@@ -38,9 +51,11 @@ function palettePanels(
 		state.notice = result.success ? "" : result.error ?? `Could not preview ${current().label}`;
 	};
 	const move = (delta: number): void => {
-		const next = Math.max(0, Math.min(PALETTES.length - 1, state.selected + delta));
-		if (next === state.selected) return;
-		state.selected = next;
+		const ordered = orderedPalettes(rows());
+		const index = ordered.findIndex((palette) => palette.id === state.selected);
+		const next = ordered[Math.max(0, Math.min(ordered.length - 1, index + delta))];
+		if (!next || next.id === state.selected) return;
+		state.selected = next.id;
 		preview();
 		request();
 	};
@@ -50,25 +65,31 @@ function palettePanels(
 
 	return {
 		render(width: number): string[] {
-			const rows = tui.terminal?.rows ?? 30;
-			const height = Math.max(8, Math.min(24, rows));
+			const terminalRows = tui.terminal?.rows ?? 30;
+			const height = Math.max(8, Math.min(24, terminalRows));
 			if (width < 24) return [accent(theme.bold("Palette")), dim("Need a wider terminal.")].map((line) => fit(line, width));
 
 			const wide = width >= 72;
 			const bodyHeight = Math.max(4, height - 4);
-			const leftWidth = wide ? Math.min(24, Math.max(18, Math.floor(width * 0.25))) : Math.max(1, width - 2);
+			const leftWidth = wide ? Math.min(26, Math.max(18, Math.floor(width * 0.27))) : Math.max(1, width - 2);
 			const rightWidth = wide ? Math.max(1, width - leftWidth - 3) : Math.max(1, width - 2);
 			const selected = current();
 			const visibleRows = Math.max(1, bodyHeight - 1);
-			const from = Math.max(0, Math.min(state.selected - Math.floor(visibleRows / 2), PALETTES.length - visibleRows));
+			const entries = rows();
+			const selectedRow = entries.findIndex((row) => "palette" in row && row.palette.id === state.selected);
+			const from = Math.max(0, Math.min(selectedRow - Math.floor(visibleRows / 2), entries.length - visibleRows));
 			const browser = [
 				accent(theme.bold(`${state.focus === "browser" ? "› " : "  "}Themes`)),
-				...PALETTES.slice(from, from + visibleRows).map((palette, offset) => {
-					const index = from + offset;
-					const chosen = index === state.selected;
+				...entries.slice(from, from + visibleRows).map((row) => {
+					if ("title" in row) return dim(`  ${row.title}`);
+					if ("hint" in row) return dim(`    ${row.hint}`);
+					const { palette } = row;
+					const chosen = palette.id === state.selected;
 					const lead = chosen && state.focus === "browser" ? accent(theme.bold("›")) : " ";
+					const star = favorites.has(palette.id) ? accent("★") : " ";
 					const name = chosen ? accent(theme.bold(palette.label)) : palette.label;
-					return `${lead} ${name}`;
+					const chips = [0, 2, 4].map((index) => paintChip(palette.swatches[index]!.hex)).join(" ");
+					return `${lead}${star} ${name} ${chips}`;
 				}),
 			];
 			const nameWidth = Math.max(...selected.swatches.map((swatch) => swatch.name.length));
@@ -76,6 +97,7 @@ function palettePanels(
 				accent(theme.bold(`${state.focus === "detail" ? "› " : "  "}Details`)),
 				theme.bold(selected.label),
 				theme.fg("success", "Live preview"),
+				dim(`${favorites.has(selected.id) ? "★ Favorite · " : ""}${groupOf(selected.id)}`),
 				"",
 				accent("Palette"),
 				previewStrip(selected),
@@ -83,7 +105,7 @@ function palettePanels(
 				...selected.swatches.map((swatch) => `${paintChip(swatch.hex)} ${swatch.name.padEnd(nameWidth)}  ${swatch.hex}`),
 			];
 
-			const title = ` ${accent(theme.bold("Palette"))}  ${dim(`${PALETTES.length} themes · ${selected.label} preview`)}`;
+			const title = ` ${accent(theme.bold("Palette"))}  ${dim(`${PALETTES.length} themes · ${favorites.size} favorites · ${selected.label}`)}`;
 			const body = Array.from({ length: bodyHeight }, (_, index) => {
 				if (!wide) {
 					const pane = state.focus === "browser" ? browser : details;
@@ -93,7 +115,7 @@ function palettePanels(
 			});
 			const footer = state.notice
 				? theme.fg("error", state.notice)
-				: [keyed("↑↓", "preview"), keyed("tab", "switch"), keyed("a", "apply"), keyed("esc", "cancel")].join(dim(" · "));
+				: [keyed("↑↓", "preview"), keyed("f", "favorite"), keyed("a", "apply"), keyed("tab", "details"), keyed("esc", "cancel")].join(dim(" · "));
 			return [
 				fit(title, width),
 				dim("─".repeat(width)),
@@ -111,13 +133,17 @@ function palettePanels(
 				preview();
 				if (!state.notice) close(true);
 			}
+			else if (data === "f") {
+				try { favorites = toggleFavorite(current().id); state.notice = ""; }
+				catch (error) { state.notice = `Could not save favorite: ${error instanceof Error ? error.message : String(error)}`; }
+			}
 			else if (matchesKey(data, Key.tab)) state.focus = state.focus === "browser" ? "detail" : "browser";
 			else if (matchesKey(data, Key.right) || matchesKey(data, Key.enter)) state.focus = "detail";
 			else if (matchesKey(data, Key.left)) state.focus = "browser";
 			else if (matchesKey(data, Key.up) || data === "k") move(-1);
 			else if (matchesKey(data, Key.down) || data === "j") move(1);
-			else if (matchesKey(data, Key.home)) { state.selected = 0; preview(); }
-			else if (matchesKey(data, Key.end)) { state.selected = PALETTES.length - 1; preview(); }
+			else if (matchesKey(data, Key.home)) { state.selected = orderedPalettes(rows())[0]!.id; preview(); }
+			else if (matchesKey(data, Key.end)) { state.selected = orderedPalettes(rows()).at(-1)!.id; preview(); }
 			else return;
 			request();
 		},
