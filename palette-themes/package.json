@@ -27,7 +27,24 @@
       "./themes/syntax.json",
       "./themes/tensor.json",
       "./themes/token.json",
-      "./themes/vector.json"
+      "./themes/vector.json",
+      "./themes/glacier.json",
+      "./themes/ember.json",
+      "./themes/iris.json",
+      "./themes/hearth.json",
+      "./themes/atelier.json",
+      "./themes/bloom.json",
+      "./themes/tidepool.json",
+      "./themes/orchard.json",
+      "./themes/dracula.json",
+      "./themes/onedark.json",
+      "./themes/tokyonight.json",
+      "./themes/catppuccin.json",
+      "./themes/nightowl.json",
+      "./themes/nord.json",
+      "./themes/monokai.json",
+      "./themes/gruvbox.json",
+      "./themes/claude.json"
     ]
   }
 }
