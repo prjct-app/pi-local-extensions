@@ -31,6 +31,9 @@ test("palette changes reach another active watcher and stop after disposal", asy
 	const stop = watchActiveTheme((theme) => received.push(theme), 20);
 
 	try {
+		// watchFile takes its first snapshot asynchronously; a write before it lands
+		// becomes the baseline and is never reported. Let the poller settle first.
+		await new Promise((resolve) => setTimeout(resolve, 100));
 		writeActiveTheme("exception");
 		await waitForTheme(received, "exception");
 		assert.deepEqual(received, ["exception"]);
