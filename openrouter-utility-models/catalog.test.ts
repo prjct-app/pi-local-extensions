@@ -1,23 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isIncompatibleRouteError, normalizeCache, selectCompatibleIds } from "./catalog.ts";
+import { CURATED_KEY, isIncompatibleRouteError, normalizeCache, selectCompatibleIds } from "./catalog.ts";
 
 test("selectCompatibleIds keeps only curated low-cost models with tool support", () => {
   const result = selectCompatibleIds({
     data: [
       {
-        id: "minimax/minimax-m2.7",
-        pricing: { prompt: "0.00000021", completion: "0.00000084" },
-        supported_parameters: ["tools", "tool_choice"],
+        id: "meta/muse-spark-1.3",
+        pricing: { prompt: "0.00000125", completion: "0.00000425" },
+        supported_parameters: ["tools", "tool_choice", "reasoning"],
       },
       {
-        id: "deepseek/deepseek-v4-flash",
-        pricing: { prompt: "0.00000005", completion: "0.00000014" },
-        supported_parameters: ["tools"],
-      },
-      {
-        id: "z-ai/glm-5.3-flash",
-        pricing: { prompt: "0.000000075", completion: "0.00000025" },
+        id: "meta/muse-spark-1.3-contributor",
+        pricing: { prompt: "0.0000001", completion: "0.0000002" },
         supported_parameters: ["tools"],
       },
       {
@@ -28,49 +23,31 @@ test("selectCompatibleIds keeps only curated low-cost models with tool support",
     ],
   });
 
-  assert.deepEqual(result, [
-    "deepseek/deepseek-v4-flash",
-    "z-ai/glm-5.3-flash",
-    "minimax/minimax-m2.7",
-  ]);
+  assert.deepEqual(result, ["meta/muse-spark-1.3"]);
 });
 
 test("selectCompatibleIds rejects missing tools, excessive prices, and malformed prices", () => {
-  const result = selectCompatibleIds({
-    data: [
-      {
-        id: "deepseek/deepseek-v4-flash",
-        pricing: { prompt: "0.00000005", completion: "0.00000014" },
-        supported_parameters: ["temperature"],
-      },
-      {
-        id: "z-ai/glm-5.3-flash",
-        pricing: { prompt: "0.0000002", completion: "0.00000025" },
-        supported_parameters: ["tools"],
-      },
-      {
-        id: "minimax/minimax-m2.7",
-        pricing: { prompt: null, completion: false },
-        supported_parameters: ["tools"],
-      },
-    ],
-  });
-
-  assert.deepEqual(result, []);
+  for (const model of [
+    { id: "meta/muse-spark-1.3", pricing: { prompt: "0.00000125", completion: "0.00000425" }, supported_parameters: ["temperature"] },
+    { id: "meta/muse-spark-1.3", pricing: { prompt: "0.000002", completion: "0.00000425" }, supported_parameters: ["tools"] },
+    { id: "meta/muse-spark-1.3", pricing: { prompt: null, completion: false }, supported_parameters: ["tools"] },
+  ]) {
+    assert.deepEqual(selectCompatibleIds({ data: [model] }), []);
+  }
 });
 
 test("selectCompatibleIds accepts exact price ceilings", () => {
   const result = selectCompatibleIds({
     data: [
       {
-        id: "deepseek/deepseek-v4-flash",
-        pricing: { prompt: "0.0000001", completion: "0.0000003" },
+        id: "meta/muse-spark-1.3",
+        pricing: { prompt: "0.0000015", completion: "0.000005" },
         supported_parameters: ["tools"],
       },
     ],
   });
 
-  assert.deepEqual(result, ["deepseek/deepseek-v4-flash"]);
+  assert.deepEqual(result, ["meta/muse-spark-1.3"]);
 });
 
 test("selectCompatibleIds rejects malformed catalogs", () => {
@@ -87,23 +64,25 @@ test("route errors distinguish incompatibility from transient rate limits", () =
 
 test("normalizeCache removes unknown and duplicate model IDs", () => {
   const cache = normalizeCache({
-    version: 3,
+    version: 4,
+    curated: CURATED_KEY,
     fetchedAt: 123,
     scope: "user",
-    compatibleIds: [
-      "deepseek/deepseek-v4-flash",
-      "deepseek/deepseek-v4-flash",
-      "unknown/model",
-      42,
-    ],
+    compatibleIds: ["meta/muse-spark-1.3", "meta/muse-spark-1.3", "unknown/model", 42],
   });
 
   assert.deepEqual(cache, {
-    version: 3,
+    version: 4,
+    curated: CURATED_KEY,
     fetchedAt: 123,
     scope: "user",
-    compatibleIds: ["deepseek/deepseek-v4-flash"],
+    compatibleIds: ["meta/muse-spark-1.3"],
   });
-  assert.equal(normalizeCache({ version: 2, fetchedAt: 123, scope: "user", compatibleIds: [] }), undefined);
-  assert.equal(normalizeCache({ version: 3, fetchedAt: 123, compatibleIds: [] }), undefined);
+  assert.equal(normalizeCache({ version: 4, curated: CURATED_KEY, fetchedAt: 123, compatibleIds: [] }), undefined);
+});
+
+test("a cache written for another shortlist is checked again, not trusted", () => {
+  assert.equal(normalizeCache({ version: 4, curated: "meta/muse-spark-1.2", fetchedAt: 123, scope: "user", compatibleIds: [] }), undefined);
+  assert.equal(normalizeCache({ version: 4, fetchedAt: 123, scope: "user", compatibleIds: ["meta/muse-spark-1.3"] }), undefined);
+  assert.equal(normalizeCache({ version: 3, curated: CURATED_KEY, fetchedAt: 123, scope: "user", compatibleIds: [] }), undefined);
 });

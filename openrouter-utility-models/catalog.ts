@@ -1,25 +1,17 @@
 export const CURATED_MODELS = [
-  {
-    id: "deepseek/deepseek-v4-flash",
-    purpose: "low-cost code cleanup",
-    maxInputCostPerMillion: 0.1,
-    maxOutputCostPerMillion: 0.3,
-  },
-  {
-    id: "z-ai/glm-5.3-flash",
-    purpose: "low-cost documentation and general utility",
-    maxInputCostPerMillion: 0.15,
-    maxOutputCostPerMillion: 0.5,
-  },
-  {
-    id: "minimax/minimax-m2.7",
-    purpose: "low-cost tool-assisted fallback",
-    maxInputCostPerMillion: 0.35,
-    maxOutputCostPerMillion: 1.25,
-  },
+  { id: "meta/muse-spark-1.3", purpose: "multimodal reasoning for coding and agent work", maxInputCostPerMillion: 1.5, maxOutputCostPerMillion: 5 },
+  { id: "deepseek/deepseek-v4-pro-0813", purpose: "DeepSeek flagship, low input cost", maxInputCostPerMillion: 0.35, maxOutputCostPerMillion: 4.25 },
+  { id: "qwen/qwen3.8-max-0902", purpose: "Alibaba Qwen flagship, multimodal", maxInputCostPerMillion: 2.5, maxOutputCostPerMillion: 7.5 },
+  { id: "moonshotai/kimi-k3", purpose: "Moonshot Kimi flagship, multimodal", maxInputCostPerMillion: 3.5, maxOutputCostPerMillion: 17.5 },
+  { id: "z-ai/glm-5.3", purpose: "Zhipu GLM flagship", maxInputCostPerMillion: 1.75, maxOutputCostPerMillion: 5.25 },
+  { id: "minimax/minimax-m3", purpose: "low-cost multimodal generalist", maxInputCostPerMillion: 0.4, maxOutputCostPerMillion: 1.5 },
+  { id: "xiaomi/mimo-v2.6-pro", purpose: "low-cost multimodal reasoning", maxInputCostPerMillion: 0.55, maxOutputCostPerMillion: 1.1 },
 ] as const;
 
 export const CURATED_MODEL_IDS = new Set<string>(CURATED_MODELS.map((model) => model.id));
+
+/** Identifies the current shortlist, so a cache written for another one is never trusted. */
+export const CURATED_KEY = [...CURATED_MODEL_IDS].sort().join(" ");
 
 export interface OpenRouterModelMetadata {
   id?: unknown;
@@ -32,7 +24,9 @@ export interface OpenRouterModelsResponse {
 }
 
 export interface CompatibilityCache {
-  version: 3;
+  version: 4;
+  /** The curated shortlist the cache was checked against; a different list is checked again. */
+  curated: string;
   fetchedAt: number;
   scope: "public" | "user";
   compatibleIds: string[];
@@ -92,7 +86,8 @@ export function normalizeCache(value: unknown): CompatibilityCache | undefined {
   if (!value || typeof value !== "object") return undefined;
   const candidate = value as Partial<CompatibilityCache>;
   if (
-    candidate.version !== 3
+    candidate.version !== 4
+    || candidate.curated !== CURATED_KEY
     || !Number.isFinite(candidate.fetchedAt)
     || (candidate.scope !== "public" && candidate.scope !== "user")
     || !Array.isArray(candidate.compatibleIds)
@@ -105,7 +100,8 @@ export function normalizeCache(value: unknown): CompatibilityCache | undefined {
   );
 
   return {
-    version: 3,
+    version: 4,
+    curated: CURATED_KEY,
     fetchedAt: candidate.fetchedAt as number,
     scope: candidate.scope,
     compatibleIds: [...new Set(compatibleIds)],
