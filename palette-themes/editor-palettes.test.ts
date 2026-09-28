@@ -25,9 +25,9 @@ test("editor palettes are selectable and each has a complete, loadable theme", (
 		const theme = JSON.parse(readFileSync(join(here, "themes", `${palette.id}.json`), "utf8"));
 		assert.equal(theme.name, palette.id);
 		for (const swatch of palette.swatches) assert.equal(theme.vars[swatch.name], swatch.hex);
-		// Same color slots as the existing themes, each pointing at a defined var.
+		// Same color slots as the existing themes, each pointing at a defined var or "" (the terminal's own).
 		assert.deepEqual(Object.keys(theme.colors).sort(), Object.keys(reference.colors).sort());
-		for (const name of Object.values(theme.colors) as string[]) assert.ok(name in theme.vars, `${palette.id}: ${name}`);
+		for (const name of Object.values(theme.colors) as string[]) assert.ok(name === "" || name in theme.vars, `${palette.id}: ${name}`);
 	}
 });
 

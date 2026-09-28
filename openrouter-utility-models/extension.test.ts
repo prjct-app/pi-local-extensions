@@ -9,9 +9,13 @@ import { fileURLToPath } from "node:url";
 const extensionDirectory = dirname(fileURLToPath(import.meta.url));
 
 const expectedModelIds = [
-  "deepseek/deepseek-v4-flash",
-  "minimax/minimax-m2.7",
-  "z-ai/glm-5.3-flash",
+  "deepseek/deepseek-v4-pro-0813",
+  "meta/muse-spark-1.3",
+  "minimax/minimax-m3",
+  "moonshotai/kimi-k3",
+  "qwen/qwen3.8-max-0902",
+  "xiaomi/mimo-v2.6-pro",
+  "z-ai/glm-5.3",
 ];
 
 function listModels(agentDirectory: string): string[] {
@@ -44,7 +48,8 @@ function writeCache(agentDirectory: string, fetchedAt: number): void {
   writeFileSync(
     join(agentDirectory, "cache", "openrouter-utility-models.json"),
     `${JSON.stringify({
-      version: 3,
+      version: 4,
+      curated: [...expectedModelIds].sort().join(" "),
       fetchedAt,
       scope: "user",
       compatibleIds: expectedModelIds,

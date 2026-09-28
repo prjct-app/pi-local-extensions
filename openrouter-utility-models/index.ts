@@ -5,15 +5,16 @@ import { join } from "node:path";
 import {
   getAgentDir,
   type ExtensionAPI,
-  type ProviderModelConfig,
 } from "@earendil-works/pi-coding-agent";
 import {
+  CURATED_KEY,
   CURATED_MODELS,
   isIncompatibleRouteError,
   normalizeCache,
   selectCompatibleIds,
   type CompatibilityCache,
 } from "./catalog.ts";
+import { curatedModelConfigs } from "./models.ts";
 
 const PUBLIC_CATALOG_URL = "https://openrouter.ai/api/v1/models";
 const USER_CATALOG_URL = "https://openrouter.ai/api/v1/models/user";
@@ -21,70 +22,6 @@ const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 5_000;
 const CACHE_PATH = join(getAgentDir(), "cache", "openrouter-utility-models.json");
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-
-const commonCompat = {
-  supportsDeveloperRole: false,
-  thinkingFormat: "openrouter" as const,
-  sendSessionAffinityHeaders: true,
-};
-
-const curatedModelConfigs: ProviderModelConfig[] = [
-  {
-    id: "deepseek/deepseek-v4-flash",
-    name: "DeepSeek: V4 Flash — low-cost code cleanup",
-    api: "openai-completions",
-    reasoning: true,
-    thinkingLevelMap: {
-      off: "none",
-      minimal: null,
-      low: null,
-      medium: null,
-      high: "high",
-      xhigh: "xhigh",
-      max: null,
-    },
-    input: ["text"],
-    cost: { input: 0.088606, output: 0.177212, cacheRead: 0.017721, cacheWrite: 0 },
-    contextWindow: 1_024_000,
-    maxTokens: 384_000,
-    compat: {
-      ...commonCompat,
-      requiresReasoningContentOnAssistantMessages: true,
-    },
-  },
-  {
-    id: "z-ai/glm-5.3-flash",
-    name: "Z.ai: GLM 5.3 Flash — low-cost documentation and general utility",
-    api: "openai-completions",
-    reasoning: true,
-    thinkingLevelMap: {
-      off: null,
-      minimal: null,
-      low: "low",
-      medium: null,
-      high: "high",
-      xhigh: null,
-      max: "max",
-    },
-    input: ["text", "image"],
-    cost: { input: 0.09, output: 0.3, cacheRead: 0.018, cacheWrite: 0 },
-    contextWindow: 1_048_576,
-    maxTokens: 131_072,
-    compat: commonCompat,
-  },
-  {
-    id: "minimax/minimax-m2.7",
-    name: "MiniMax: M2.7 — low-cost tool-assisted fallback",
-    api: "openai-completions",
-    reasoning: true,
-    thinkingLevelMap: { off: null },
-    input: ["text"],
-    cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0 },
-    contextWindow: 204_800,
-    maxTokens: 131_072,
-    compat: commonCompat,
-  },
-];
 
 type CatalogSource = "live public" | "live user" | "fresh cache" | "unavailable" | "observed failure";
 
@@ -128,7 +65,8 @@ async function fetchCompatibleIds(apiKey?: string): Promise<CompatibilityCache> 
   }
 
   return {
-    version: 3,
+    version: 4,
+    curated: CURATED_KEY,
     fetchedAt: Date.now(),
     scope,
     compatibleIds: selectCompatibleIds(await response.json()),
@@ -265,7 +203,8 @@ export default async function openRouterUtilityModels(pi: ExtensionAPI) {
     };
     registerFilteredProvider();
     await writeCache({
-      version: 3,
+      version: 4,
+      curated: CURATED_KEY,
       fetchedAt: failedAt,
       scope: state.scope,
       compatibleIds: [...state.compatibleIds],
