@@ -4,7 +4,7 @@ Three scripts. Together they give a baseline per extension, and the same command
 
 | Script | What it measures | Source |
 | --- | --- | --- |
-| `context-payloads.mjs` | Fixed context per request: tool schemas, the tool's line in `<tools>`, its rules | Exact payloads saved by pi-trace-logger (`~/Desktop/pi-logs`) |
+| `context-payloads.mjs` | Fixed context per request: tool schemas, the tool's line in `<tools>`, its rules | Exact payloads saved by pi-trace-logger (`~/Desktop/pi-logs`). They are written only while `PI_TRACE_PAYLOADS=full`; run the trace with that set when a measurement needs them |
 | `sessions.mjs` | Dynamic context, and reliability | Session files, including pi-subagents children |
 | `perf.mjs` | Startup cold and warm, idle CPU, disk, build size | Spawns `pi --mode rpc --no-session` in a scratch agent dir. No model is called. |
 

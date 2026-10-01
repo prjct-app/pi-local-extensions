@@ -3,6 +3,8 @@
  * Fixed context per request, by extension: tool schemas, the tool's line in
  * the system prompt's <tools> list, and its rules. Read from the exact
  * payloads pi-trace-logger saved (~/Desktop/pi-logs/<session>/payloads).
+ * Those files exist only while the trace ran with PI_TRACE_PAYLOADS=full: the
+ * logger defaults to summary mode, which writes no payloads.
  *
  *   node scripts/audit/context-payloads.mjs [--days 7] [--out file.json]
  *
