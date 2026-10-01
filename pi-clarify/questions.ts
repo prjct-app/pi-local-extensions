@@ -54,3 +54,56 @@ export function responseText(questions: readonly Question[], answers: Answers): 
     .map(question => `${question.id}. ${question.text}\nRespuesta: ${Array.isArray(answers[question.id]) ? (answers[question.id] as readonly string[]).join(', ') : answers[question.id]}`)
     .join('\n\n');
 }
+
+const text = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value.trim() : typeof value === 'number' || typeof value === 'boolean' ? String(value) : undefined;
+const clip = (value: string, max: number): string => (value.length > max ? value.slice(0, max) : value);
+/** What models send as an option: a string, or an object carrying it under one of these keys. */
+const optionText = (value: unknown): string | undefined => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    for (const key of ['label', 'text', 'value', 'option', 'item', 'name', 'title']) {
+      const found = text(record[key]);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  return text(value);
+};
+const TYPES: Readonly<Record<string, Question['type']>> = {
+  single: 'single', choice: 'single', select: 'single', radio: 'single', one: 'single',
+  multiple: 'multiple', multi: 'multiple', checkbox: 'multiple', checkboxes: 'multiple', multiselect: 'multiple', many: 'multiple',
+  text: 'text', open: 'text', free: 'text', input: 'text', string: 'text', freeform: 'text',
+};
+
+/**
+ * Turns the shapes models actually send into the schema's, before Pi validates
+ * it: options as `{ label }` / `{ text, value }` objects, a missing or
+ * unmatched `recommended`, type aliases, numbers as ids, extra fields. A model
+ * that keeps resending the same near-miss loops on the validation error instead.
+ */
+export function repairQuestions(raw: unknown): unknown {
+  const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw;
+  const list: unknown = Array.isArray(parsed) ? parsed : (parsed as { questions?: unknown } | null)?.questions;
+  if (!Array.isArray(list)) return raw;
+  const questions = (list as unknown[]).slice(0, 12).map((item, index) => {
+    const record: Record<string, unknown> = item && typeof item === 'object' ? item as Record<string, unknown> : { text: item };
+    const options: string[] = Array.isArray(record.options) ? [...new Set((record.options as unknown[]).map(optionText).filter((value): value is string => !!value).map(value => clip(value, 200)))].slice(0, 8) : [];
+    const flagged = Array.isArray(record.options)
+      ? (record.options as unknown[]).find(option => !!option && typeof option === 'object' && (option as Record<string, unknown>).recommended === true) : undefined;
+    const declared = text(record.type)?.toLowerCase();
+    const type: Question['type'] = (declared ? TYPES[declared] : undefined) ?? (options.length ? 'single' : 'text');
+    const wanted = optionText(record.recommended) ?? optionText(flagged);
+    const recommended = type === 'text' ? undefined
+      : options.find(option => option === wanted) ?? options.find(option => option.toLowerCase() === wanted?.toLowerCase()) ?? options[0];
+    const required = typeof record.required === 'boolean' ? record.required : text(record.required) !== 'false';
+    return {
+      id: clip(text(record.id) || `Q${index + 1}`, 40),
+      text: clip(text(record.text) ?? text(record.question) ?? text(record.prompt) ?? text(record.label) ?? text(record.title) ?? '', 500),
+      type,
+      ...(type !== 'text' ? { options, ...(recommended ? { recommended } : {}) } : {}),
+      required,
+    };
+  });
+  return { questions };
+}
