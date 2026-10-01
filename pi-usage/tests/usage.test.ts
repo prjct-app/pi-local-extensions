@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -283,4 +283,45 @@ test('/usage without a TUI reports session, project and every project as text', 
   piUsage(fresh.pi);
   await fresh.commands.get('usage').handler('', ephemeral);
   assert.match(notes.join('\n'), /session \$1\.00 · project \$3\.50/);
+});
+
+test('/usage off hides the line in every session until /usage on', async () => {
+  const root = dir();
+  process.env.PRJCT_HOME = join(root, 'prjct');
+  process.env.PI_CODING_AGENT_DIR = join(root, 'agent');
+  const projectDir = join(root, 'agent', 'sessions', '--work-app--');
+  mkdirSync(projectDir, { recursive: true });
+  const statuses: [string, string | undefined][] = [];
+  const notes: string[] = [];
+  const ctx = {
+    hasUI: true, mode: 'tui', cwd: '/work/app',
+    ui: { theme: { fg: (_tone: string, text: string) => text }, setStatus: (key: string, text: string | undefined) => statuses.push([key, text]), setWidget() {}, notify: (text: string) => notes.push(text) },
+    sessionManager: {
+      getSessionDir: () => projectDir, getSessionFile: () => join(projectDir, 'now.jsonl'), getSessionId: () => 'now',
+      getHeader: () => header('now', 5), getEntries: () => [reply(6, 'gpt-6-sol', usage(10, 1, 1))],
+    },
+  };
+  const line = () => statuses.filter(([key]) => key === 'fact:usage').at(-1)?.[1];
+  const first = recordingPi();
+  piUsage(first.pi);
+  first.events.get('session_start')!({ type: 'session_start' }, ctx);
+  assert.equal(line(), '$1.00 session');
+  await first.commands.get('usage').handler('off', ctx);
+  assert.equal(line(), undefined);
+  assert.match(notes.at(-1)!, /Cost line off/);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, 'prjct', 'pi-usage', 'settings.json'), 'utf8')), { line: false });
+  first.events.get('message_end')!({ type: 'message_end', message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-6-sol', usage: usage(1, 1, 1) } }, ctx);
+  assert.equal(line(), undefined, 'a reply does not bring it back');
+
+  // A new session reads the choice.
+  statuses.length = 0;
+  const second = recordingPi();
+  piUsage(second.pi);
+  second.events.get('session_start')!({ type: 'session_start' }, ctx);
+  assert.equal(line(), undefined);
+  await second.commands.get('usage').handler('on', ctx);
+  assert.equal(line(), '$1.00 session');
+  assert.match(notes.at(-1)!, /Cost line on/);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, 'prjct', 'pi-usage', 'settings.json'), 'utf8')), { line: true });
+  second.events.get('session_shutdown')!({ type: 'session_shutdown' }, ctx);
 });

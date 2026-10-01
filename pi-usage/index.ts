@@ -8,8 +8,9 @@
  */
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { SYMBOL, ago, brand, completer, openPanel, panelText, setFact, type CommandOption, type PanelDetail, type PanelField, type PanelItem, type PanelSpec } from '@prjct.app/pi-tui-kit';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { Pricing, isFree } from './pricing.ts';
 import {
   callsLine, compact, kindLines, labelOf, modelLines, ownersOf, plural, pricedLine, subsidyOf, summarize, ticketGroups, tokensLine, usd,
@@ -46,12 +47,33 @@ const options: CommandOption[] = [
   { value: 'session', description: 'open on this session' },
   { value: 'project', description: 'open on every session in this folder' },
   { value: 'global', description: 'open on every project' },
+  { value: 'on', description: 'show session and project cost above the editor' },
+  { value: 'off', description: 'hide the cost line above the editor' },
 ];
+
+type Settings = { line: boolean };
+
+/** The person's choice for the cost line, the same in every session. On until turned off. */
+function readSettings(file: string): Settings {
+  try {
+    const saved = JSON.parse(readFileSync(file, 'utf8')) as Partial<Settings>;
+    return { line: saved.line !== false };
+  } catch {
+    return { line: true };
+  }
+}
+function writeSettings(file: string, settings: Settings): void {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(`${file}.tmp`, `${JSON.stringify(settings, null, 2)}\n`);
+  renameSync(`${file}.tmp`, file);
+}
 
 export default function piUsage(pi: ExtensionAPI): void {
   const home = prjctHome();
   const scanner = new Scanner(join(home, 'pi-usage', 'scan.json'));
   const pricing = new Pricing(join(home, 'pi-usage', 'pricing.json'));
+  const settingsFile = join(home, 'pi-usage', 'settings.json');
+  const settings = readSettings(settingsFile);
   const listeners = new Set<() => void>();
   const state: {
     where?: Where;
@@ -131,6 +153,7 @@ export default function piUsage(pi: ExtensionAPI): void {
     const ctx = state.lineCtx;
     const view = state.view;
     if (!ctx || !view) return;
+    if (!settings.line) { setFact(ctx, 'usage', undefined); return; }
     const session = `${usd(subsidyOf(view.session.summary.total))} session`;
     setFact(ctx, 'usage', state.projectRead ? `${session} · ${usd(subsidyOf(view.project.summary.total))} project` : session);
   };
@@ -347,7 +370,7 @@ export default function piUsage(pi: ExtensionAPI): void {
 
   /** Re-reads this folder in the background, at most every 30s: ages and other terminals' sessions move. */
   const readProject = (delayMs: number): void => {
-    if (state.timer || state.running || Date.now() - state.projectAt < 30_000) return;
+    if (!settings.line || state.timer || state.running || Date.now() - state.projectAt < 30_000) return;
     state.timer = setTimeout(() => {
       state.timer = undefined;
       const where = state.where;
@@ -398,10 +421,23 @@ export default function piUsage(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand('usage', {
-    description: brand('tokens and subsidy (API list-price value) · session | project | global'),
+    description: brand('tokens and subsidy (API list-price value) · session | project | global | on | off'),
     getArgumentCompletions: completer(options),
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const word = args.trim().split(/\s+/)[0] ?? '';
+      if (word === 'on' || word === 'off') {
+        settings.line = word === 'on';
+        try { writeSettings(settingsFile, settings); } catch { /* the choice still holds for this session */ }
+        state.lineCtx ??= ctx;
+        if (settings.line) {
+          if (!state.where) { state.where = locate(ctx); state.live = liveFile(ctx); rebuild(); }
+          state.projectAt = 0;
+          readProject(0);
+        }
+        showLine();
+        ctx.ui.notify(settings.line ? 'Cost line on: session and project cost above the editor.' : 'Cost line off. /usage on brings it back.', 'info');
+        return;
+      }
       const initial: Scope = (SCOPES as readonly string[]).includes(word) ? word as Scope : 'session';
       if (!(ctx.hasUI && ctx.mode === 'tui')) {
         await refresh(ctx);
