@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Personal Pi extensions. Sources live here; Pi loads the compiled builds from ~/.pi/agent/builds.",
   "scripts": {
-    "build:pi": "for dir in pi-fast-mode herdr-prompt-state palette-themes pi-context-prune pi-clarify pi-jobs pi-usage; do node scripts/build-pi.mjs \"$dir\"; done",
+    "build:pi": "for dir in pi-fast-mode herdr-prompt-state palette-themes pi-context-prune pi-clarify pi-jobs pi-usage pi-unescape; do node scripts/build-pi.mjs \"$dir\"; done",
     "test": "node --experimental-strip-types --no-warnings --test palette-themes/*.test.ts palette-themes/*.test.mjs"
   },
   "devDependencies": {
