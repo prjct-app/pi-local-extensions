@@ -2,6 +2,8 @@
 
 How many tokens you used, and the **subsidy**: what that same use would cost at API list price. Covers this session, this project and every project. `/usage` opens the shared docked panel.
 
+The line above the editor always shows what this session and this project cost so far, for example `$0.05 session · $277.74 project`. It sits dim at the right of the shared mode line. Each reply updates it as soon as it lands. The folder's other sessions are reread in the background after startup and at most every 30s.
+
 It never reaches the model. It registers no tools, sends no messages, adds no prompt hooks and writes nothing to the session. It reads the session files Pi already writes, and keeps its own cache in `~/.prjct/pi-usage/`.
 
 ## What each part is for

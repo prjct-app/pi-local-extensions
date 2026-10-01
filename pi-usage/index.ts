@@ -7,7 +7,7 @@
  * keeps its own cache in ~/.prjct/pi-usage.
  */
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { SYMBOL, ago, brand, completer, openPanel, panelText, type CommandOption, type PanelDetail, type PanelField, type PanelItem, type PanelSpec } from '@prjct.app/pi-tui-kit';
+import { SYMBOL, ago, brand, completer, openPanel, panelText, setFact, type CommandOption, type PanelDetail, type PanelField, type PanelItem, type PanelSpec } from '@prjct.app/pi-tui-kit';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { Pricing, isFree } from './pricing.ts';
@@ -63,7 +63,12 @@ export default function piUsage(pi: ExtensionAPI): void {
     view?: View;
     scanning?: string;
     running?: Promise<void>;
-  } = { mains: [], children: [] };
+    /** The context the line above the editor belongs to. */
+    lineCtx?: ExtensionContext;
+    projectRead: boolean;
+    projectAt: number;
+    timer?: ReturnType<typeof setTimeout>;
+  } = { mains: [], children: [], projectRead: false, projectAt: 0 };
 
   const changed = (): void => { for (const listener of listeners) listener(); };
 
@@ -121,15 +126,21 @@ export default function piUsage(pi: ExtensionAPI): void {
     state.view = { session, project, global };
   };
 
-  const progress = (text: string | undefined): void => { state.scanning = text; rebuild(); changed(); };
+  /** "$0.05 session · $277.74 project" on the line above the editor. UI only: the model never sees it. */
+  const showLine = (): void => {
+    const ctx = state.lineCtx;
+    const view = state.view;
+    if (!ctx || !view) return;
+    const session = `${usd(subsidyOf(view.session.summary.total))} session`;
+    setFact(ctx, 'usage', state.projectRead ? `${session} · ${usd(subsidyOf(view.project.summary.total))} project` : session);
+  };
 
-  /** Reads what changed: this folder and its subagent runs first, then every project, then prices. */
-  const collect = async (force: boolean): Promise<void> => {
-    const where = state.where!;
+  const progress = (text: string | undefined): void => { state.scanning = text; rebuild(); changed(); showLine(); };
+
+  /** This folder's other sessions and every subagent run they or this session launched. */
+  const scanProject = async (where: Where): Promise<void> => {
     await scanner.load();
-    progress('reading this project…');
-    const skip = (path: string) => path !== where.currentFile;
-    const projectPaths = (await jsonlIn(where.projectDir)).filter(skip);
+    const projectPaths = (await jsonlIn(where.projectDir)).filter(path => path !== where.currentFile);
     const mains: FileUsage[] = [];
     for (const path of projectPaths) { const file = await scanner.scan(path); if (file) mains.push(file); }
     scanner.prune(where.projectDir, new Set(projectPaths));
@@ -150,7 +161,17 @@ export default function piUsage(pi: ExtensionAPI): void {
     }
     state.mains = mains;
     state.children = children;
+    state.projectRead = true;
+    state.projectAt = Date.now();
+  };
+
+  /** Reads what changed: this folder and its subagent runs first, then every project, then prices. */
+  const collect = async (force: boolean): Promise<void> => {
+    const where = state.where!;
+    progress('reading this project…');
+    await scanProject(where);
     progress('reading all projects…');
+    const skip = (path: string) => path !== where.currentFile;
 
     const globalPaths = (await allSessionFiles(where.sessionsRoot)).filter(skip);
     const childPaths = await allChildFiles(where.stateRoot);
@@ -324,12 +345,56 @@ export default function piUsage(pi: ExtensionAPI): void {
     return lines.join('\n');
   };
 
-  // Passive: keeps an open panel's session totals live. Returns nothing, so the message is untouched.
-  pi.on('message_end', (_event, ctx) => {
-    if (!listeners.size || !state.where) return;
+  /** Re-reads this folder in the background, at most every 30s: ages and other terminals' sessions move. */
+  const readProject = (delayMs: number): void => {
+    if (state.timer || state.running || Date.now() - state.projectAt < 30_000) return;
+    state.timer = setTimeout(() => {
+      state.timer = undefined;
+      const where = state.where;
+      if (!where || state.running) return;
+      void scanProject(where).then(() => scanner.save()).catch(() => undefined).then(() => { rebuild(); changed(); showLine(); });
+    }, delayMs);
+    state.timer.unref?.();
+  };
+
+  // Passive from here on: these handlers return nothing, so no message, prompt or tool changes.
+  pi.on('session_start', (_event, ctx) => {
+    state.lineCtx = ctx;
+    state.where = locate(ctx);
+    state.live = liveFile(ctx);
+    state.projectRead = false;
+    state.projectAt = 0;
+    rebuild();
+    showLine();
+    // After startup settles, so opening Pi never waits on it.
+    readProject(1_500);
+  });
+
+  // Each reply adds its cost to the line right away.
+  pi.on('message_end', (event, ctx) => {
+    if (!state.live || !state.where || event.message?.role !== 'assistant' || !(event.message as { usage?: unknown }).usage) return;
+    absorb(state.live, { type: 'message', timestamp: new Date().toISOString(), message: event.message });
+    if (!state.lineCtx) state.lineCtx = ctx;
+    rebuild();
+    changed();
+    showLine();
+  });
+
+  // A finished run: re-read this session whole (cache warms, compactions) and, now and then, the folder.
+  pi.on('agent_end', (_event, ctx) => {
+    if (!state.where) return;
     state.live = liveFile(ctx);
     rebuild();
     changed();
+    showLine();
+    readProject(0);
+  });
+
+  pi.on('session_shutdown', () => {
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = undefined;
+    if (state.lineCtx) setFact(state.lineCtx, 'usage', undefined);
+    state.lineCtx = undefined;
   });
 
   pi.registerCommand('usage', {

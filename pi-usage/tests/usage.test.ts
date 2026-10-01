@@ -207,9 +207,41 @@ test('nothing reaches the model: no tools, no messages, no prompt hooks', async 
   const { pi, calls, events, commands } = recordingPi();
   piUsage(pi);
   assert.deepEqual([...new Set(calls)].sort(), ['on', 'registerCommand']);
-  assert.deepEqual([...events.keys()], ['message_end']);
+  // Only passive events: nothing that edits the prompt, the context, a request or a tool call.
+  assert.deepEqual([...events.keys()].sort(), ['agent_end', 'message_end', 'session_shutdown', 'session_start']);
   assert.deepEqual([...commands.keys()], ['usage']);
   assert.equal(events.get('message_end')!({ type: 'message_end', message: { role: 'assistant' } }, {}), undefined);
+  assert.equal(events.get('agent_end')!({ type: 'agent_end', messages: [] }, {}), undefined);
+});
+
+test('the line above the editor shows the session, then the project once read, and follows each reply', async () => {
+  const root = dir();
+  process.env.PRJCT_HOME = join(root, 'prjct');
+  process.env.PI_CODING_AGENT_DIR = join(root, 'agent');
+  const projectDir = join(root, 'agent', 'sessions', '--work-app--');
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(join(projectDir, 'old.jsonl'), jsonl([header('old'), reply(2, 'gpt-6-sol', usage(100, 10, 2))]));
+  const statuses: [string, string | undefined][] = [];
+  const entries = [user(5, 'hello'), reply(6, 'gpt-6-sol', usage(10, 1, 1))];
+  const ctx = {
+    hasUI: true, mode: 'tui', cwd: '/work/app',
+    ui: { theme: { fg: (_tone: string, text: string) => text }, setStatus: (key: string, text: string | undefined) => statuses.push([key, text]), setWidget() {}, notify() {} },
+    sessionManager: {
+      getSessionDir: () => projectDir, getSessionFile: () => join(projectDir, 'now.jsonl'), getSessionId: () => 'now',
+      getHeader: () => header('now', 5), getEntries: () => entries,
+    },
+  };
+  const { pi, events } = recordingPi();
+  piUsage(pi);
+  const line = () => statuses.filter(([key]) => key === 'fact:usage').at(-1)?.[1];
+  assert.equal(events.get('session_start')!({ type: 'session_start' }, ctx), undefined);
+  assert.equal(line(), '$1.00 session');
+  events.get('message_end')!({ type: 'message_end', message: { role: 'assistant', provider: 'openai-codex', model: 'gpt-6-sol', usage: usage(10, 1, 0.5) } }, ctx);
+  assert.equal(line(), '$1.50 session', 'a reply shows up before the run ends');
+  await new Promise(resolve => setTimeout(resolve, 1_800));
+  assert.equal(line(), '$1.50 session · $3.50 project');
+  events.get('session_shutdown')!({ type: 'session_shutdown' }, ctx);
+  assert.equal(line(), undefined, 'the line clears with the session');
 });
 
 test('/usage without a TUI reports session, project and every project as text', async () => {
