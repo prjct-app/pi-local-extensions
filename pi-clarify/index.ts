@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { clarify } from './panel.ts';
-import { validateQuestions } from './questions.ts';
+import { repairQuestions, validateQuestions } from './questions.ts';
 
 const question = Type.Object({
   id: Type.String({ minLength: 1, maxLength: 40 }),
@@ -18,6 +18,8 @@ export default function piClarify(pi: ExtensionAPI): void {
     label: 'Clarify',
     description: 'Ask the person consequential clarification questions in a terminal panel. Use single for one choice, multiple for checkboxes, text for open responses. For every choice question, set recommended to the exact option you judge most viable; the UI marks it “(recomendada)”. Write questions and choices in the person’s language; keep batches short. A cancellation is not an answer: do not assume a default.',
     parameters: Type.Object({ questions: Type.Array(question, { minItems: 1, maxItems: 12 }) }, { additionalProperties: false }),
+    // Before Pi validates: options sent as { label } objects and the like become the strings the schema wants.
+    prepareArguments: (raw: unknown) => repairQuestions(raw) as never,
     execute: async (_id, input, _signal, _onUpdate, ctx) => {
       const error = validateQuestions(input.questions);
       if (error) throw new Error(error);
