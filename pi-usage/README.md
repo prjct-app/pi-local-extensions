@@ -17,6 +17,8 @@ Requires Pi and Node.js 22.19+. Install the package, then reload Pi:
 pi install npm:@prjct.app/pi-usage
 ```
 
+The shared TUI library (`@prjct.app/pi-tui-kit`) is installed automatically as a runtime dependency. No separate kit or `pi-ui` installation is required for the cost line or the `/usage` panel.
+
 ## What each part is for
 
 | Part | What it is for |

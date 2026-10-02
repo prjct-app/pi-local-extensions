@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertRuntimeDependencies } from "./package-dependencies.mjs";
 
 const workspace = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const repositories = [
@@ -73,6 +74,7 @@ for (const packageRoot of packages) {
       assert.ok(paths.has("dist/index.js") && paths.has("dist/index.d.ts"));
       assert.ok(!manifest.keywords?.includes("pi-package"), "Library must not masquerade as an extension");
     }
+    assertRuntimeDependencies(packedRoot, manifest);
     assert.ok(!paths.has(".env") && !paths.has("auth.json"), `${manifest.name}: private configuration`);
     results.push({ name: manifest.name, tarball, files: paths.size });
     console.log(`${manifest.name}: ${paths.size} files, README + cover + manifest OK`);

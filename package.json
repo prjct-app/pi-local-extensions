@@ -5,7 +5,7 @@
   "description": "Pi extensions maintained in one repository; each package can be installed independently.",
   "scripts": {
     "build:pi": "for dir in pi-delivery pi-fast-mode pi-prompt-state pi-palettes pi-context-prune pi-clarify pi-jobs pi-usage pi-unescape; do node scripts/build-pi.mjs \"$dir\"; done",
-    "test": "node --import tsx --test --test-concurrency=1 pi-delivery/*.test.ts pi-palettes/*.test.ts pi-palettes/*.test.mjs pi-clarify/tests/*.test.ts pi-context-prune/tests/*.test.ts pi-jobs/tests/*.test.ts pi-unescape/tests/*.test.ts pi-usage/tests/*.test.ts pi-prompt-state/tests/*.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 pi-delivery/*.test.ts pi-palettes/*.test.ts pi-palettes/*.test.mjs pi-clarify/tests/*.test.ts pi-context-prune/tests/*.test.ts pi-jobs/tests/*.test.ts pi-unescape/tests/*.test.ts pi-usage/tests/*.test.ts pi-prompt-state/tests/*.test.ts scripts/audit/*.test.mjs"
   },
   "devDependencies": {
     "@earendil-works/pi-tui": "0.85.1",
