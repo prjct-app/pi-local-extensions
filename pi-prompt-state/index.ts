@@ -1,4 +1,4 @@
-// Managed by herdr-pi-tree — refreshed by the plugin's Pi-extension action; hand edits are overwritten.
+// Adapted from Herdr Pi Tree's prompt-state bridge for the pi-prompt-state package.
 
 // Companion Pi extension for Herdr Pi Tree: the missing producer of
 // `herdr:blocked`. Herdr's own managed extension (~/.pi/agent/extensions/
@@ -47,7 +47,7 @@ function labelFor(event) {
   return title.length <= LABEL_MAX ? title : title.slice(0, LABEL_MAX - 1) + '…';
 }
 
-module.exports = function herdrPromptState(pi) {
+export default function herdrPromptState(pi) {
   if (process.env.HERDR_ENV !== '1') return;
 
   // Tool calls in flight, by id: the only prompts that block the agent.

@@ -49,7 +49,7 @@ export const messageOwner = type => MESSAGE_OWNERS[type] ?? (type ? `unknown:${t
 
 /** Extensions installed today, from ~/.pi/agent/settings.json packages (builds/<name>). */
 export const EXTENSIONS = [
-  'p-ui', 'pi-markdown', 'pi-clipboard', 'pi-plan', 'pi-mcp', 'pi-subagents', 'pi-memory', 'pi-fast-mode',
-  'herdr-prompt-state', 'pi-team', 'pi-qa', 'palette-themes', 'pi-context-prune', 'pi-self-compact', 'pi-clarify',
+  'pi-ui', 'pi-markdown', 'pi-clipboard', 'pi-plan', 'pi-mcp', 'pi-subagents', 'pi-memory', 'pi-fast-mode',
+  'pi-prompt-state', 'pi-team', 'pi-qa', 'pi-palettes', 'pi-context-prune', 'pi-self-compact', 'pi-clarify',
   'pi-answer', 'pi-secrets', 'pi-jobs', 'pi-usage', 'pi-unescape',
 ];

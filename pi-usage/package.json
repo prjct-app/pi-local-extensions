@@ -1,6 +1,6 @@
 {
   "name": "@prjct.app/pi-usage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tokens and subsidy (API list-price value) per session, project and every project, in the docked panel. Never touches the model's context.",
   "type": "module",
   "license": "MIT",
@@ -16,29 +16,43 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-usage/docs/cover-v2.png"
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/prjct-app/pi-usage.git"
+    "url": "git+https://github.com/prjct-app/pi-local-extensions.git",
+    "directory": "pi-usage"
   },
   "bugs": {
-    "url": "https://github.com/prjct-app/pi-usage/issues"
+    "url": "https://github.com/prjct-app/pi-local-extensions/issues"
   },
-  "homepage": "https://github.com/prjct-app/pi-usage#readme",
+  "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-usage#readme",
   "files": [
     "README.md",
     "index.ts",
     "pricing.ts",
     "report.ts",
-    "scan.ts"
+    "scan.ts",
+    "LICENSE",
+    "docs/cover.png",
+    "docs/cover-v2.png"
   ],
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "check:package": "npm pack --dry-run --ignore-scripts"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@prjct.app/pi-tui-kit": "^0.3.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@prjct.app/pi-unescape",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Decodes literal \\uXXXX accents that models write in prose tool arguments (replies, team messages, reports), so people read accents and the model stops copying escapes",
   "type": "module",
   "license": "MIT",
@@ -16,26 +16,38 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-unescape/docs/cover-v2.png"
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/prjct-app/pi-unescape.git"
+    "url": "git+https://github.com/prjct-app/pi-local-extensions.git",
+    "directory": "pi-unescape"
   },
   "bugs": {
-    "url": "https://github.com/prjct-app/pi-unescape/issues"
+    "url": "https://github.com/prjct-app/pi-local-extensions/issues"
   },
-  "homepage": "https://github.com/prjct-app/pi-unescape#readme",
+  "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-unescape#readme",
   "files": [
     "README.md",
-    "index.ts"
+    "index.ts",
+    "LICENSE",
+    "docs/cover.png",
+    "docs/cover-v2.png"
   ],
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "check:package": "npm pack --dry-run --ignore-scripts"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
 }
