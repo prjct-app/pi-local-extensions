@@ -10,8 +10,5 @@
   "devDependencies": {
     "@earendil-works/pi-tui": "0.85.1",
     "esbuild": "^0.28.1"
-  },
-  "dependencies": {
-    "@prjct.app/pi-tui-kit": "file:../pi-tui-kit"
   }
 }

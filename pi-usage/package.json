@@ -1,13 +1,44 @@
 {
-  "name": "pi-usage",
+  "name": "@prjct.app/pi-usage",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "description": "Tokens and subsidy (API list-price value) per session, project and every project, in the docked panel. Never touches the model's context.",
-  "pi": { "extensions": ["./index.ts"] },
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "ai-coding",
+    "developer-tools",
+    "usage",
+    "cost-tracking"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prjct-app/pi-usage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prjct-app/pi-usage/issues"
+  },
+  "homepage": "https://github.com/prjct-app/pi-usage#readme",
+  "files": [
+    "README.md",
+    "index.ts",
+    "pricing.ts",
+    "report.ts",
+    "scan.ts"
+  ],
   "scripts": {
-    "build:pi": "node ../scripts/build-pi.mjs .",
-    "test": "node --import ../../pi-team/node_modules/tsx/dist/loader.mjs --test tests/*.test.ts",
-    "typecheck": "../../pi-team/node_modules/.bin/tsc --project tsconfig.json"
-  }
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {}
 }

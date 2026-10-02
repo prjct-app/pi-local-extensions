@@ -1,4 +1,37 @@
 {
-  "name": "herdr-prompt-state",
-  "private": true
+  "name": "@prjct.app/herdr-prompt-state",
+  "version": "0.1.0",
+  "description": "Pi extension: the herdr prompt state plugin",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "herdr"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prjct-app/herdr-prompt-state.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prjct-app/herdr-prompt-state/issues"
+  },
+  "homepage": "https://github.com/prjct-app/herdr-prompt-state#readme",
+  "files": [
+    "index.ts"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {}
 }

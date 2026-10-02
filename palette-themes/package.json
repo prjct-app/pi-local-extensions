@@ -1,11 +1,16 @@
 {
-  "name": "palette-themes",
-  "private": true,
-  "piBuild": {
-    "copy": [
-      "themes"
-    ]
-  },
+  "name": "@prjct.app/palette-themes",
+  "version": "0.1.0",
+  "description": "Pi extension: a curated set of color palettes and theme integrations",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "themes",
+    "palette"
+  ],
   "pi": {
     "extensions": [
       "./index.ts"
@@ -46,5 +51,75 @@
       "./themes/gruvbox.json",
       "./themes/claude.json"
     ]
-  }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prjct-app/palette-themes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prjct-app/palette-themes/issues"
+  },
+  "homepage": "https://github.com/prjct-app/palette-themes#readme",
+  "files": [
+    "editor-palettes.test.ts",
+    "editor-palettes.ts",
+    "favorites.test.ts",
+    "favorites.ts",
+    "index.ts",
+    "original-palettes.ts",
+    "palette-groups.ts",
+    "palette-panel.ts",
+    "palettes.ts",
+    "photo-palettes.test.ts",
+    "photo-palettes.ts",
+    "sync.test.ts",
+    "sync.ts",
+    "themes/agent.json",
+    "themes/atelier.json",
+    "themes/bloom.json",
+    "themes/catppuccin.json",
+    "themes/claude.json",
+    "themes/debug.json",
+    "themes/deploy.json",
+    "themes/dracula.json",
+    "themes/ember.json",
+    "themes/exception.json",
+    "themes/flux.json",
+    "themes/glacier.json",
+    "themes/gruvbox.json",
+    "themes/hearth.json",
+    "themes/iris.json",
+    "themes/kernel.json",
+    "themes/legacy.json",
+    "themes/merge.json",
+    "themes/monokai.json",
+    "themes/neural.json",
+    "themes/nightowl.json",
+    "themes/nord.json",
+    "themes/onedark.json",
+    "themes/orchard.json",
+    "themes/pipeline.json",
+    "themes/production.json",
+    "themes/refactor.json",
+    "themes/synapse.json",
+    "themes/syntax.json",
+    "themes/tensor.json",
+    "themes/tidepool.json",
+    "themes/token.json",
+    "themes/tokyonight.json",
+    "themes/vector.json"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "piBuild": {
+    "copy": [
+      "themes"
+    ]
+  },
+  "dependencies": {}
 }

@@ -1,13 +1,41 @@
 {
-  "name": "pi-unescape",
+  "name": "@prjct.app/pi-unescape",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "description": "Decodes literal \\uXXXX accents that models write in prose tool arguments (replies, team messages, reports), so people read accents and the model stops copying escapes",
-  "pi": { "extensions": ["./index.ts"] },
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "ai-coding",
+    "developer-tools",
+    "unicode",
+    "escaping"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prjct-app/pi-unescape.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prjct-app/pi-unescape/issues"
+  },
+  "homepage": "https://github.com/prjct-app/pi-unescape#readme",
+  "files": [
+    "README.md",
+    "index.ts"
+  ],
   "scripts": {
-    "build:pi": "node ../scripts/build-pi.mjs .",
-    "test": "node --import ../../pi-team/node_modules/tsx/dist/loader.mjs --test tests/*.test.ts",
-    "typecheck": "../../pi-team/node_modules/.bin/tsc --project tsconfig.json"
-  }
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {}
 }

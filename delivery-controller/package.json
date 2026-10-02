@@ -1,7 +1,39 @@
 {
-  "name": "pi-delivery-controller",
-  "private": true,
+  "name": "@prjct.app/delivery-controller",
+  "version": "0.1.0",
+  "description": "Pi extension: the delivery controller runtime integration",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "delivery"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prjct-app/delivery-controller.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prjct-app/delivery-controller/issues"
+  },
+  "homepage": "https://github.com/prjct-app/delivery-controller#readme",
+  "files": [
+    "index.ts",
+    "state.test.ts",
+    "state.ts"
+  ],
   "scripts": {
-    "test": "tsx --test state.test.ts && PI_OFFLINE=1 pi --no-extensions -e ./index.ts --list-models openai-codex/gpt-5.6-sol >/dev/null"
-  }
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test state.test.ts"
+  },
+  "dependencies": {}
 }
