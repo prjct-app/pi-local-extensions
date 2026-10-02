@@ -1,0 +1,8 @@
+name: Audit Pi runtime dependencies
+description: Audit the dependencies Pi installs, without the development SDK or host peer packages.
+runs:
+  using: composite
+  steps:
+    - name: Audit installed runtime dependencies
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/audit-production.mjs"
