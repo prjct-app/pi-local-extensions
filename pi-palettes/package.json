@@ -1,7 +1,7 @@
 {
-  "name": "@prjct.app/palette-themes",
+  "name": "@prjct.app/pi-palettes",
   "version": "0.1.0",
-  "description": "Pi extension: a curated set of color palettes and theme integrations",
+  "description": "Preview and switch 34 Pi color themes, with favorites and synchronized open sessions.",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -50,32 +50,30 @@
       "./themes/monokai.json",
       "./themes/gruvbox.json",
       "./themes/claude.json"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-palettes/docs/cover-v2.png"
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/prjct-app/palette-themes.git"
+    "url": "git+https://github.com/prjct-app/pi-local-extensions.git",
+    "directory": "pi-palettes"
   },
   "bugs": {
-    "url": "https://github.com/prjct-app/palette-themes/issues"
+    "url": "https://github.com/prjct-app/pi-local-extensions/issues"
   },
-  "homepage": "https://github.com/prjct-app/palette-themes#readme",
+  "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-palettes#readme",
   "files": [
-    "editor-palettes.test.ts",
     "editor-palettes.ts",
-    "favorites.test.ts",
     "favorites.ts",
     "index.ts",
     "original-palettes.ts",
     "palette-groups.ts",
     "palette-panel.ts",
     "palettes.ts",
-    "photo-palettes.test.ts",
     "photo-palettes.ts",
-    "sync.test.ts",
     "sync.ts",
     "themes/agent.json",
     "themes/atelier.json",
@@ -110,16 +108,29 @@
     "themes/tidepool.json",
     "themes/token.json",
     "themes/tokyonight.json",
-    "themes/vector.json"
+    "themes/vector.json",
+    "README.md",
+    "LICENSE",
+    "docs/cover.png",
+    "docs/cover-v2.png"
   ],
   "scripts": {
-    "check": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --no-warnings --test *.test.ts *.test.mjs",
+    "check:package": "npm pack --dry-run --ignore-scripts"
   },
   "piBuild": {
     "copy": [
       "themes"
     ]
   },
-  "dependencies": {}
+  "dependencies": {
+    "@prjct.app/pi-tui-kit": "^0.3.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
 }

@@ -1,10 +1,21 @@
 # pi-usage
 
+[![pi-usage — for PI Agent](https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-usage/docs/cover-v2.png)](https://pi.dev)
+
 How many tokens you used, and the **subsidy**: what that same use would cost at API list price. Covers this session, this project and every project. `/usage` opens the shared docked panel.
 
 The line above the editor always shows what this session and this project cost so far, for example `$0.05 session · $277.74 project`. It sits dim at the right of the shared mode line. Each reply updates it as soon as it lands. The folder's other sessions are reread in the background after startup and at most every 30s. `/usage off` hides the line, and `/usage on` brings it back. The choice holds for every session and is saved in `~/.prjct/pi-usage/settings.json`.
 
 It never reaches the model. It registers no tools, sends no messages, adds no prompt hooks and writes nothing to the session. It reads the session files Pi already writes, and keeps its own cache in `~/.prjct/pi-usage/`.
+
+
+## Install
+
+Requires Pi and Node.js 22.19+. Install the package, then reload Pi:
+
+```sh
+pi install npm:@prjct.app/pi-usage
+```
 
 ## What each part is for
 
@@ -33,3 +44,5 @@ It never reaches the model. It registers no tools, sends no messages, adds no pr
 - **Which model gives the most subsidy?** Run `/usage global` and read **By model · subsidy**.
 - **The numbers look stale.** Press `r` in the panel. It rereads changed files and refreshes list prices.
 - **Without the TUI** (print, RPC), `/usage` prints the same rows as text, followed by the models.
+
+License: [MIT](LICENSE).

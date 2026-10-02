@@ -2,13 +2,17 @@
   "name": "pi-local-extensions",
   "private": true,
   "type": "module",
-  "description": "Personal Pi extensions. Sources live here; Pi loads the compiled builds from ~/.pi/agent/builds.",
+  "description": "Pi extensions maintained in one repository; each package can be installed independently.",
   "scripts": {
-    "build:pi": "for dir in pi-fast-mode herdr-prompt-state palette-themes pi-context-prune pi-clarify pi-jobs pi-usage pi-unescape; do node scripts/build-pi.mjs \"$dir\"; done",
-    "test": "node --experimental-strip-types --no-warnings --test palette-themes/*.test.ts palette-themes/*.test.mjs"
+    "build:pi": "for dir in pi-delivery pi-fast-mode pi-prompt-state pi-palettes pi-context-prune pi-clarify pi-jobs pi-usage pi-unescape; do node scripts/build-pi.mjs \"$dir\"; done",
+    "test": "node --import tsx --test --test-concurrency=1 pi-delivery/*.test.ts pi-palettes/*.test.ts pi-palettes/*.test.mjs pi-clarify/tests/*.test.ts pi-context-prune/tests/*.test.ts pi-jobs/tests/*.test.ts pi-unescape/tests/*.test.ts pi-usage/tests/*.test.ts pi-prompt-state/tests/*.test.ts"
   },
   "devDependencies": {
     "@earendil-works/pi-tui": "0.85.1",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "@prjct.app/pi-tui-kit": "file:../pi-tui-kit",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
   }
 }

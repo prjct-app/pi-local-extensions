@@ -1,21 +1,20 @@
 {
-  "name": "@prjct.app/pi-fast-mode",
-  "version": "0.1.1",
-  "description": "Toggle the priority service tier for supported Codex and Grok models in Pi.",
+  "name": "@prjct.app/pi-prompt-state",
+  "version": "0.1.0",
+  "description": "Report blocked tool prompts to Herdr through Pi events; inactive outside Herdr.",
   "type": "module",
   "license": "MIT",
   "keywords": [
     "pi-package",
     "pi",
     "pi-extension",
-    "fast-mode",
-    "performance"
+    "herdr"
   ],
   "pi": {
     "extensions": [
       "./index.ts"
     ],
-    "image": "https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-fast-mode/docs/cover-v2.png"
+    "image": "https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-prompt-state/docs/cover-v2.png"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -23,12 +22,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/prjct-app/pi-local-extensions.git",
-    "directory": "pi-fast-mode"
+    "directory": "pi-prompt-state"
   },
   "bugs": {
     "url": "https://github.com/prjct-app/pi-local-extensions/issues"
   },
-  "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-fast-mode#readme",
+  "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-prompt-state#readme",
   "files": [
     "index.ts",
     "README.md",
@@ -37,11 +36,10 @@
     "docs/cover-v2.png"
   ],
   "scripts": {
-    "check:package": "npm pack --dry-run --ignore-scripts"
+    "check:package": "npm pack --dry-run --ignore-scripts",
+    "test": "node --experimental-strip-types --no-warnings --test tests/*.test.ts"
   },
-  "dependencies": {
-    "@prjct.app/pi-tui-kit": "^0.3.1"
-  },
+  "dependencies": {},
   "publishConfig": {
     "access": "public"
   },
