@@ -37,6 +37,20 @@ function resolveSource(importer, specifier) {
     .find(candidate => existsSync(candidate));
 }
 
+export function assertRegistryLockfile(manifest, lockfile) {
+  for (const [path, entry] of Object.entries(lockfile.packages ?? {})) {
+    assert.ok(!entry.link, `${manifest.name}: local link in public lockfile: ${path}`);
+    if (entry.resolved) {
+      assert.ok(!entry.resolved.startsWith("file:") && !entry.resolved.startsWith("../"),
+        `${manifest.name}: local path in public lockfile: ${path}`);
+    }
+  }
+  for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+    const entry = lockfile.packages?.[`node_modules/${dependency}`];
+    assert.ok(entry?.version, `${manifest.name}: runtime dependency absent from lockfile: ${dependency}`);
+  }
+}
+
 /** Follow shipped runtime entry points; development scripts and type-only imports are not runtime dependencies. */
 export function assertRuntimeDependencies(packageRoot, manifest) {
   const dependencies = manifest.dependencies ?? {};

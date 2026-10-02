@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertRuntimeDependencies } from "./package-dependencies.mjs";
+import { assertRegistryLockfile, assertRuntimeDependencies } from "./package-dependencies.mjs";
 
 const workspace = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const repositories = [
@@ -47,6 +47,10 @@ for (const packageRoot of packages) {
     assert.ok(paths.has("LICENSE"), `${manifest.name}: missing license`);
     checkLinks(readme, packedRoot);
     assert.notEqual(manifest.private, true, `${manifest.name}: private package`);
+    const sourceLockfile = join(packageRoot, "package-lock.json");
+    if (existsSync(sourceLockfile)) {
+      assertRegistryLockfile(manifest, JSON.parse(readFileSync(sourceLockfile, "utf8")));
+    }
     assert.equal(manifest.publishConfig?.access, "public", `${manifest.name}: publish access`);
     assert.ok(manifest.repository?.url, `${manifest.name}: repository metadata`);
     for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {
