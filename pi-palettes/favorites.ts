@@ -1,10 +1,9 @@
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { AGENT_DIR, writePrivate } from "./library.ts";
 import { PALETTE_IDS } from "./palettes.ts";
 
-const FAVORITES_PATH = join(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent"), "palette-favorites.json");
+const FAVORITES_PATH = join(AGENT_DIR, "palette-favorites.json");
 const knownIds = new Set(PALETTE_IDS);
 
 export function readFavorites(path = FAVORITES_PATH): Set<string> {
@@ -21,19 +20,17 @@ export function readFavorites(path = FAVORITES_PATH): Set<string> {
 	return new Set(data.filter((id: string) => knownIds.has(id)));
 }
 
+/** Replace the favorites with `ids` (kept in order, duplicates dropped). */
+export function writeFavorites(ids: Iterable<string>, path = FAVORITES_PATH): Set<string> {
+	const favorites = new Set(ids);
+	writePrivate(path, `${JSON.stringify([...favorites])}\n`);
+	return favorites;
+}
+
 export function toggleFavorite(id: string, path = FAVORITES_PATH): Set<string> {
 	if (!knownIds.has(id)) throw new Error(`Unknown palette: ${id}`);
 	const favorites = readFavorites(path);
 	if (favorites.has(id)) favorites.delete(id);
 	else favorites.add(id);
-	mkdirSync(dirname(path), { recursive: true });
-	const temp = `${path}.${randomUUID()}.tmp`;
-	try {
-		writeFileSync(temp, `${JSON.stringify([...favorites])}\n`);
-		renameSync(temp, path);
-	} catch (error) {
-		try { unlinkSync(temp); } catch { /* No temporary file to remove. */ }
-		throw error;
-	}
-	return favorites;
+	return writeFavorites(favorites, path);
 }
