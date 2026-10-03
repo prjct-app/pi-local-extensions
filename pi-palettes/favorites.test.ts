@@ -3,9 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { readFavorites, toggleFavorite } from "./favorites.ts";
-import { groupedPalettes, orderedPalettes } from "./palette-groups.ts";
-import { PALETTES } from "./palettes.ts";
+
+// Keep the real ~/.pi/agent (and any library in it) out of the test.
+process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-palette-agent-"));
+const { readFavorites, toggleFavorite } = await import("./favorites.ts");
+const { groupedPalettes, orderedPalettes } = await import("./palette-groups.ts");
+const { PALETTES } = await import("./palettes.ts");
 
 function names(favorites: ReadonlySet<string>): string[] {
 	return groupedPalettes(favorites).flatMap((row) => "title" in row ? [row.title] : []);

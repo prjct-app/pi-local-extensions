@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { openPalettePanels } from "./palette-panel.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-palette-agent-"));
+const { openPalettePanels } = await import("./palette-panel.ts");
 
 const theme = { fg: (_color, text) => text, bold: (text) => text };
 

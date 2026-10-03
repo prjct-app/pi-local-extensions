@@ -1,21 +1,37 @@
-export type Swatch = {
-	name: string;
-	hex: string;
-};
+import { mergePalettes, readBundled, readUserLibrary, type LibraryPalette, type Swatch } from "./library.ts";
 
-export type Palette = {
-	id: string;
-	label: string;
+export type { Swatch };
+
+export type Palette = LibraryPalette & {
+	/** Shipped with the extension (false for palettes from the person's own library). */
 	bundled: boolean;
 	swatches: Swatch[];
 };
 
-import { EDITOR_PALETTES } from "./editor-palettes.ts";
-import { ORIGINAL_PALETTES } from "./original-palettes.ts";
-import { PHOTO_PALETTES } from "./photo-palettes.ts";
+function toPalette(p: LibraryPalette, bundled: boolean): Palette {
+	const swatches = p.swatches?.length
+		? p.swatches
+		: ["accent", "secondary", "highlight", "success", "warning"].map((name) => ({ name, hex: p.vars[name]! }));
+	return { ...p, bundled, swatches };
+}
 
-export const PALETTES: Palette[] = [...ORIGINAL_PALETTES, ...PHOTO_PALETTES, ...EDITOR_PALETTES];
+/** Errors reading the person's library; the picker shows it instead of failing. */
+export let LIBRARY_ERROR = "";
 
+function loadPalettes(): Palette[] {
+	const bundled = readBundled().palettes;
+	let own: LibraryPalette[] = [];
+	try {
+		own = readUserLibrary()?.palettes ?? [];
+	} catch (error) {
+		LIBRARY_ERROR = `Your palette library could not be read: ${error instanceof Error ? error.message : String(error)}`;
+	}
+	const bundledIds = new Set(bundled.map((p) => p.id));
+	const ownIds = new Set(own.map((p) => p.id));
+	return mergePalettes(bundled, own).map((p) => toPalette(p, bundledIds.has(p.id) && !ownIds.has(p.id)));
+}
+
+export const PALETTES: Palette[] = loadPalettes();
 export const PALETTE_IDS = PALETTES.map((palette) => palette.id);
 export const BUNDLED_IDS = PALETTES.filter((palette) => palette.bundled).map((palette) => palette.id);
 
