@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 /**
  * Palettes are data. The extension ships palettes.json (the official set) and
  * merges the person's own library on top: a local file they import, export or
- * sync on demand. Nothing is fetched while Pi runs.
+ * sync on demand.
  */
 export type Swatch = { name: string; hex: string };
 export type LibraryPalette = {
@@ -34,7 +34,15 @@ export type Library = {
 export const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 export const DATA_DIR = join(AGENT_DIR, "pi-palette");
 export const LIBRARY_PATH = join(DATA_DIR, "library.json");
-export const THEMES_DIR = join(DATA_DIR, "themes");
+/**
+ * Pi's own themes folder. Pi applies the theme in settings before any extension
+ * runs and only looks here then, so the theme files have to live here.
+ */
+export const THEMES_DIR = join(AGENT_DIR, "themes");
+/** The theme files this extension wrote into THEMES_DIR; nothing else there is touched. */
+const OWNED_PATH = join(DATA_DIR, "owned-themes.json");
+/** Where 0.3.0 generated theme files (too late for the startup theme). */
+const LEGACY_THEMES_DIR = join(DATA_DIR, "themes");
 const BUNDLED_PATH = join(dirname(fileURLToPath(import.meta.url)), "palettes.json");
 
 /** Every Pi color role, mapped to a theme variable (shared with pi-themes). */
@@ -189,28 +197,66 @@ export function themeJson(p: LibraryPalette) {
 	};
 }
 
+function readOwned(path: string): Set<string> {
+	try {
+		const data: unknown = JSON.parse(readFileSync(path, "utf8"));
+		return new Set(Array.isArray(data) ? data.filter((f): f is string => typeof f === "string" && /^[a-z0-9][a-z0-9-]*\.json$/.test(f)) : []);
+	} catch {
+		return new Set();
+	}
+}
+
+function isLink(path: string): boolean {
+	try {
+		return lstatSync(path).isSymbolicLink();
+	} catch {
+		return false;
+	}
+}
+
+/** Replace a file (or a symlink, never its target) in one step, so Pi's theme watcher never reads half of it. */
+function writeAtomic(path: string, text: string): void {
+	const temp = `${path}.${randomUUID()}.tmp`;
+	try {
+		writeFileSync(temp, text);
+		renameSync(temp, path);
+	} catch (error) {
+		try { unlinkSync(temp); } catch { /* nothing to clean up */ }
+		throw error;
+	}
+}
+
 /**
  * Keep one theme file per palette in `dir`, rewriting only what changed and
- * removing files for palettes that are gone. Returns the paths Pi should load.
+ * removing the files this extension wrote for palettes that are gone. A theme
+ * of the person's own with the same name is left alone and wins. Returns the
+ * paths of the files this extension owns.
  */
-export function syncThemeFiles(palettes: LibraryPalette[], dir = THEMES_DIR): string[] {
+export function syncThemeFiles(palettes: LibraryPalette[], dir = THEMES_DIR, ownedPath = OWNED_PATH): string[] {
 	mkdirSync(dir, { recursive: true });
-	const wanted = new Set<string>();
+	const owned = readOwned(ownedPath);
+	const kept = new Set<string>();
 	const paths: string[] = [];
 	for (const p of palettes) {
 		const file = `${p.id}.json`;
 		const path = join(dir, file);
 		const text = `${JSON.stringify(themeJson(p), null, "\t")}\n`;
-		wanted.add(file);
+		let current: string | undefined;
+		try { current = readFileSync(path, "utf8"); } catch { /* a new file, or a symlink to nothing left by an older palette extension */ }
+		if (current !== undefined && current !== text && !owned.has(file)) continue;
+		if (current !== text || isLink(path)) writeAtomic(path, text);
+		kept.add(file);
 		paths.push(path);
-		let current = "";
-		try { current = readFileSync(path, "utf8"); } catch { /* new file */ }
-		if (current !== text) writeFileSync(path, text);
 	}
-	for (const file of readdirSync(dir)) {
-		if (file.endsWith(".json") && !wanted.has(file)) {
-			try { unlinkSync(join(dir, file)); } catch { /* already gone */ }
-		}
+	for (const file of owned) {
+		if (kept.has(file)) continue;
+		try { unlinkSync(join(dir, file)); } catch { /* already gone */ }
 	}
+	writePrivate(ownedPath, `${JSON.stringify([...kept].sort())}\n`);
 	return paths;
+}
+
+/** Remove the theme folder 0.3.0 generated, now that the files live in Pi's themes folder. */
+export function removeLegacyThemes(dir = LEGACY_THEMES_DIR): void {
+	rmSync(dir, { recursive: true, force: true });
 }

@@ -3,14 +3,35 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { brand, completer } from "@prjct.app/pi-tui-kit";
-import { assertSecureSite, claimLink, forgetAuth, isUnauthorized, pullLibrary, pushLibrary, readAuth, revokeToken, SITE, startLink, writeAuth } from "./cloud.ts";
+import { brand, completer, openPanel, setFact, type Tone } from "@prjct.app/pi-tui-kit";
+import { isDue, KEEP, listVersions, readState, readVersion, runBackup, saveBeforeRestore, type BackupReason } from "./backup.ts";
+import { backupPanel, FACT, factText, when } from "./backup-ui.ts";
+import {
+	assertSecureSite,
+	claimLink,
+	forgetAuth,
+	getBackup,
+	isNotFound,
+	isUnauthorized,
+	listBackups,
+	pullLibrary,
+	pushBackup,
+	pushLibrary,
+	readAuth,
+	revokeToken,
+	SITE,
+	startLink,
+	writeAuth,
+	type CloudVersion,
+} from "./cloud.ts";
 import { readFavorites, writeFavorites } from "./favorites.ts";
 import {
 	DATA_DIR,
+	mergePalettes,
 	parseLibrary,
 	readBundled,
 	readUserLibrary,
+	removeLegacyThemes,
 	syncThemeFiles,
 	writePrivate,
 	writeUserLibrary,
@@ -76,6 +97,8 @@ async function installLibrary(ctx: ExtensionCommandContext, library: Library, no
 	const bundledIds = new Set(readBundled().palettes.map((p) => p.id));
 	const own = library.palettes;
 	writeUserLibrary({ format: "pi-palette", version: 1, palettes: own });
+	// Pi finds theme files at load, so they have to be there before the reload.
+	try { syncThemeFiles(mergePalettes(readBundled().palettes, own)); } catch { /* the reload still brings the library */ }
 	const known = new Set([...bundledIds, ...own.map((p) => p.id)]);
 	if (library.favorites) writeFavorites(library.favorites.filter((id) => known.has(id)));
 	if (library.active && known.has(library.active)) writePrivate(PENDING_PATH, JSON.stringify({ theme: library.active }));
@@ -173,6 +196,9 @@ async function waitForApproval(ctx: ExtensionContext, link: { poll: string; expi
 			if (claim.status === "ok") {
 				writeAuth({ token: claim.token, username: claim.username, site: SITE, connectedAt: new Date().toISOString() });
 				ctx.ui.notify(`Connected${claim.username ? ` as @${claim.username}` : ""}. Run /palette sync to bring your palettes.`, "info");
+				// The first cloud backup now, not at the next weekly check.
+				const { text, tone } = await backup(ctx, "connect");
+				safely(() => ctx.ui.notify(text, NOTIFY[tone]));
 				return;
 			}
 			if (claim.status !== "pending") break;
@@ -218,20 +244,155 @@ async function logout(ctx: ExtensionContext): Promise<void> {
 	}
 	try { await revokeToken(auth.token); } catch { /* removed locally either way; it can also be revoked on the site */ }
 	forgetAuth();
-	ctx.ui.notify("Disconnected. Your palettes stay on this computer.", "info");
+	showBackupFact(ctx);
+	ctx.ui.notify("Disconnected. Your palettes and their backups stay on this computer.", "info");
+}
+
+/** The library as it is on this computer now. Throws when the library file cannot be read. */
+function snapshot(ctx: ExtensionContext): Library {
+	const own = readUserLibrary()?.palettes ?? [];
+	let favorites: string[] = [];
+	try { favorites = [...readFavorites()]; } catch { /* back up the palettes anyway */ }
+	const active = currentPaletteId(ctx);
+	return { format: "pi-palette", version: 1, ...(active ? { active } : {}), favorites, palettes: own };
+}
+
+/** UI calls from a background backup may land after the session was replaced. */
+function safely(fn: () => void): void {
+	try { fn(); } catch { /* that session's UI is gone */ }
+}
+
+let backupRunning = false;
+
+function showBackupFact(ctx: ExtensionContext): void {
+	safely(() => setFact(ctx, FACT, factText(readState(), listVersions().length, Boolean(readAuth()), backupRunning)));
+}
+
+function cloudProblem(error: unknown): string {
+	if (isNotFound(error)) return `${SITE} does not keep backups yet`;
+	if (error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError")) return `could not reach ${SITE}`;
+	return message(error);
+}
+
+/** Cloud errors in a few words; a rejected token stays recognizable. */
+async function cloudCall<T>(fn: () => Promise<T>): Promise<T> {
+	try {
+		return await fn();
+	} catch (error) {
+		if (isUnauthorized(error)) throw error;
+		throw new Error(cloudProblem(error));
+	}
+}
+
+type Outcome = { text: string; tone: Tone };
+
+/** One backup run. Never throws: the outcome says what happened, in one line. */
+async function backup(ctx: ExtensionContext, reason: BackupReason): Promise<Outcome> {
+	if (backupRunning) return { text: "A backup is already running.", tone: "muted" };
+	backupRunning = true;
+	showBackupFact(ctx);
+	try {
+		const auth = readAuth();
+		const client = `Pi · ${platform()}`;
+		const result = await runBackup({
+			local: snapshot(ctx),
+			reason,
+			isUnauthorized,
+			cloud: auth
+				? {
+					pull: () => cloudCall(() => pullLibrary(auth.token)),
+					push: async (library) => ({ count: (await cloudCall(() => pushBackup(auth.token, library, client))).count }),
+				}
+				: undefined,
+		});
+		if (!result) return { text: "Another Pi is backing up right now.", tone: "muted" };
+		const saved = result.written ? `Backed up: ${result.localCount}/${KEEP} versions here` : `Nothing changed since the last backup (${result.localCount}/${KEEP} here)`;
+		if (result.unauthorized) {
+			forgetAuth();
+			return { text: `${saved}. This Pi was disconnected from pi-themes; run /palette login to back up to the cloud again.`, tone: "warning" };
+		}
+		if (result.cloudError) return { text: `${saved}, but the cloud copy failed: ${result.cloudError}`, tone: "warning" };
+		return { text: result.cloudCount !== undefined ? `${saved}, ${result.cloudCount}/${KEEP} on ${SITE}.` : `${saved}.`, tone: "success" };
+	} catch (error) {
+		return { text: `Palette backup failed: ${message(error)}`, tone: "error" };
+	} finally {
+		backupRunning = false;
+		showBackupFact(ctx);
+	}
+}
+
+const NOTIFY: Record<Tone, "info" | "warning" | "error"> = { accent: "info", success: "info", muted: "info", dim: "info", text: "info", warning: "warning", error: "error" };
+
+async function backupNow(ctx: ExtensionContext): Promise<void> {
+	const { text, tone } = await backup(ctx, "manual");
+	ctx.ui.notify(text, NOTIFY[tone]);
+}
+
+/** Replace the library with a backed-up version, after saving the current one. */
+async function restore(ctx: ExtensionCommandContext, id: string): Promise<void> {
+	const [side, key = ""] = id.split(/:(.*)/s);
+	let library: Library;
+	let label: string;
+	try {
+		if (side === "cloud") {
+			const auth = readAuth();
+			if (!auth) throw new Error("this Pi is not connected; run /palette login");
+			library = await getBackup(auth.token, key);
+			label = "the cloud backup";
+		} else {
+			const version = readVersion(key);
+			library = version.local;
+			label = `the backup from ${when(version.createdAt)}`;
+		}
+		await saveBeforeRestore(snapshot(ctx));
+	} catch (error) {
+		ctx.ui.notify(`Could not restore: ${isUnauthorized(error) ? "this Pi was disconnected; run /palette login" : message(error)}`, "error");
+		return;
+	}
+	await installLibrary(ctx, library, `Restored ${label}: ${library.palettes.length} palettes, ${library.favorites?.length ?? 0} favorites`);
+}
+
+async function browseBackups(ctx: ExtensionCommandContext): Promise<void> {
+	const auth = readAuth();
+	let cloud: CloudVersion[] = [];
+	let problem: string | undefined;
+	const loadCloud = async () => {
+		if (!auth) return;
+		try {
+			cloud = await listBackups(auth.token);
+			problem = undefined;
+		} catch (error) {
+			problem = cloudProblem(error);
+		}
+	};
+	await loadCloud();
+	let chosen: string | undefined;
+	await openPanel(ctx, backupPanel({
+		connected: Boolean(auth),
+		cloud: () => cloud,
+		cloudProblem: () => problem,
+		backupNow: async () => {
+			const outcome = await backup(ctx, "manual");
+			await loadCloud();
+			return outcome;
+		},
+		restore: (id) => { chosen = id; },
+		site: SITE,
+	}));
+	if (chosen) await restore(ctx, chosen);
 }
 
 export default function paletteThemes(pi: ExtensionAPI) {
 	let stopThemeSync: (() => void) | undefined;
 
-	// Theme files are generated from the palettes (bundled + the person's library) on every load.
-	pi.on("resources_discover", () => {
-		try {
-			return { themePaths: syncThemeFiles(PALETTES) };
-		} catch {
-			return { themePaths: [] };
-		}
-	});
+	// Theme files are generated from the palettes (bundled + the person's library) on every
+	// load, into Pi's own themes folder: Pi applies the theme in settings before any
+	// extension event runs, so a theme that only appears through resources_discover is
+	// "not found" at startup.
+	try {
+		syncThemeFiles(PALETTES);
+		removeLegacyThemes();
+	} catch { /* the theme files stay as they were */ }
 
 	pi.on("session_start", (_event, ctx) => {
 		stopThemeSync?.();
@@ -254,6 +415,14 @@ export default function paletteThemes(pi: ExtensionAPI) {
 				ctx.ui.notify(result.error ?? `Could not sync palette ${id}`, "warning");
 			}
 		});
+
+		// The weekly backup: checked on every start, run at most once a week, in the background.
+		showBackupFact(ctx);
+		if (isDue(readState())) {
+			void backup(ctx, "weekly").then(({ text, tone }) => {
+				if (tone === "warning" || tone === "error") safely(() => ctx.ui.notify(text, NOTIFY[tone]));
+			});
+		}
 	});
 
 	pi.on("session_shutdown", () => {
@@ -268,12 +437,14 @@ export default function paletteThemes(pi: ExtensionAPI) {
 		login: "connect this Pi to your pi-themes account",
 		sync: "send and bring your palettes (pi-themes account)",
 		logout: "disconnect from pi-themes",
+		backup: "back up your palettes now (here, and to pi-themes when connected)",
+		backups: "browse your palette backups and restore one",
 		next: "next palette",
 		prev: "previous palette",
 	};
 
 	pi.registerCommand("palette", {
-		description: brand("color palette: picker with live preview, import/export, sync"),
+		description: brand("color palette: picker with live preview, import/export, sync, backups"),
 		getArgumentCompletions: completer(() => [
 			...PALETTES.map((palette) => ({ value: palette.id, description: `${palette.label}: ${palette.swatches.map((swatch) => swatch.name).join(" · ")}` })),
 			...Object.entries(ACTIONS).map(([value, description]) => ({ value, description })),
@@ -288,6 +459,8 @@ export default function paletteThemes(pi: ExtensionAPI) {
 				case "login": return login(ctx);
 				case "sync": return sync(ctx);
 				case "logout": return logout(ctx);
+				case "backup": return backupNow(ctx);
+				case "backups": return browseBackups(ctx);
 			}
 			const resolved = resolvePaletteArg(args);
 			if (resolved === "next") {

@@ -1,7 +1,7 @@
 {
   "name": "@prjct.app/pi-palette",
-  "version": "0.3.0",
-  "description": "34 Pi color themes as data: live preview, favorites, synced sessions, and your own library from pi-themes by file or optional account sync.",
+  "version": "0.4.0",
+  "description": "34 Pi color themes as data: live preview, favorites, synced sessions, weekly versioned backups, and your own library from pi-themes by file or optional account sync.",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -30,6 +30,8 @@
   },
   "homepage": "https://github.com/prjct-app/pi-local-extensions/tree/main/pi-palettes#readme",
   "files": [
+    "backup.ts",
+    "backup-ui.ts",
     "cloud.ts",
     "favorites.ts",
     "index.ts",

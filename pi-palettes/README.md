@@ -2,7 +2,7 @@
 
 [![pi-palette — for PI Agent](https://raw.githubusercontent.com/prjct-app/pi-local-extensions/main/pi-palettes/docs/cover-v2.png)](https://pi.dev)
 
-34 color themes for Pi, with live preview, favorites, synchronization between open sessions, and your own library from [pi-themes](https://palette.prjct.app).
+34 color themes for Pi, with live preview, favorites, synchronization between open sessions, weekly versioned backups, and your own library from [pi-themes](https://palette.prjct.app).
 
 ## Install
 
@@ -24,7 +24,7 @@ The picker groups your own palettes, editor-inspired, photo-inspired and origina
 
 ## Your library
 
-Palettes are data. The package ships `palettes.json` (the official set), and your own library lives in `~/.pi/agent/pi-palette/library.json`. Theme files are generated from both into `~/.pi/agent/pi-palette/themes/` each time Pi loads. Nothing is fetched while Pi runs.
+Palettes are data. The package ships `palettes.json` (the official set), and your own library lives in `~/.pi/agent/pi-palette/library.json`. Theme files are generated from both into Pi's themes folder, `~/.pi/agent/themes/`, each time Pi loads: Pi applies the theme in your settings before extensions run, so the files must already be there. The extension lists the files it wrote in `~/.pi/agent/pi-palette/owned-themes.json` and only ever rewrites or removes those; a theme of your own with the same name is left alone and wins.
 
 There are two ways to bring palettes in.
 
@@ -41,7 +41,21 @@ pi-themes also offers a prompt that tells Pi to write `library.json` for you; ru
 - `/palette sync` sends your palettes and favorites to pi-themes, brings your library back, and reloads.
 - `/palette logout` revokes the token and deletes it from this computer.
 
-The token can only read and write your palette library: no email, no other account data. The extension only talks to the pi-themes API (never to its database), only over HTTPS, and only during `login`, `sync` and `logout`. You can also disconnect any Pi from your library page on the site. Set `PI_THEMES_URL` to point at another pi-themes deployment.
+The token can only read and write your palette library: no email, no other account data. The extension only talks to the pi-themes API (never to its database), only over HTTPS, and only while connected: during `login`, `sync`, `logout`, `backup` and `backups`, and for the weekly backup. Without a token it never reaches the network. You can also disconnect any Pi from your library page on the site. Set `PI_THEMES_URL` to point at another pi-themes deployment.
+
+## Backups
+
+Every time Pi starts, the extension checks whether a week has passed since the last backup. If it has, it backs up in the background; otherwise it does nothing until next week.
+
+- **On this computer**, always: `~/.pi/agent/pi-palette/backups/` keeps the last 10 versions of your library (your palettes, favorites and the active palette). Fully offline; no account needed.
+- **On pi-themes**, while this Pi is connected: the same library is saved there too, and pi-themes keeps its last 10 versions. What pi-themes holds is also copied into the local version, so each side has a copy of the other.
+- A version identical to the newest one is not saved again, so ten unchanged weeks never push out your history.
+- If the cloud cannot be reached, the local backup still happens and you are told why the cloud part failed.
+
+The mode line shows the state, for example `palette backup 2d ago · 7 local · 7 cloud` (`cloud ✕` when the last cloud attempt failed).
+
+- `/palette backup` backs up now, whatever the weekly clock says.
+- `/palette backups` lists every version, here and on pi-themes. `b` backs up now; `r` (pressed twice) restores the selected version, after saving your current library as a version of its own so the restore can be undone.
 
 ### Library format
 

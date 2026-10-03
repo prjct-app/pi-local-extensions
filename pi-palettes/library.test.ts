@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -73,18 +73,46 @@ test("your palettes replace bundled ones with the same id and add the rest", () 
 
 test("theme files follow the palettes: written once, rewritten when changed, removed when gone", () => {
 	const dir = mkdtempSync(join(tmpdir(), "pi-palette-themes-"));
+	const owned = join(dir, "..", `${dir.split("/").pop()}-owned.json`);
 	try {
 		const palettes = readBundled().palettes.slice(0, 3);
-		const paths = syncThemeFiles(palettes, dir);
+		const paths = syncThemeFiles(palettes, dir, owned);
 		assert.equal(paths.length, 3);
 		const first = statSync(paths[0]!).mtimeMs;
-		writeFileSync(join(dir, "stale.json"), "{}");
-		syncThemeFiles(palettes.slice(0, 2), dir);
+		syncThemeFiles(palettes.slice(0, 2), dir, owned);
 		assert.deepEqual(readdirSync(dir).sort(), palettes.slice(0, 2).map((p) => `${p.id}.json`).sort());
 		assert.equal(statSync(paths[0]!).mtimeMs, first);
 		assert.equal(JSON.parse(readFileSync(paths[0]!, "utf8")).name, palettes[0]!.id);
+		const changed = { ...palettes[0]!, vars: { ...palettes[0]!.vars, accent: "#123456" } };
+		syncThemeFiles([changed, palettes[1]!], dir, owned);
+		assert.equal(JSON.parse(readFileSync(paths[0]!, "utf8")).vars.accent, "#123456");
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
+		rmSync(owned, { force: true });
+	}
+});
+
+test("theme files share Pi's themes folder: the person's own themes are never touched", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pi-palette-themes-"));
+	const owned = join(dir, "..", `${dir.split("/").pop()}-owned.json`);
+	try {
+		const [a, b, c] = readBundled().palettes;
+		// Their own theme, a theme with a palette's name, and a link an older extension left to nothing.
+		writeFileSync(join(dir, "mine.json"), "{}");
+		writeFileSync(join(dir, `${b!.id}.json`), '{"name":"theirs"}');
+		symlinkSync(join(dir, "gone", `${c!.id}.json`), join(dir, `${c!.id}.json`));
+		const paths = syncThemeFiles([a!, b!, c!], dir, owned);
+		assert.deepEqual(paths.map((p) => p.split("/").pop()), [`${a!.id}.json`, `${c!.id}.json`]);
+		assert.equal(readFileSync(join(dir, "mine.json"), "utf8"), "{}");
+		assert.equal(JSON.parse(readFileSync(join(dir, `${b!.id}.json`), "utf8")).name, "theirs");
+		assert.equal(lstatSync(join(dir, `${c!.id}.json`)).isSymbolicLink(), false);
+		assert.equal(JSON.parse(readFileSync(join(dir, `${c!.id}.json`), "utf8")).name, c!.id);
+		// Palettes that are gone take only their own files with them.
+		syncThemeFiles([], dir, owned);
+		assert.deepEqual(readdirSync(dir).sort(), ["mine.json", `${b!.id}.json`].sort());
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+		rmSync(owned, { force: true });
 	}
 });
 
