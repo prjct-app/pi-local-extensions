@@ -1,40 +1,36 @@
 import { PALETTES, type Palette } from "./palettes.ts";
 
-export type PaletteRow = { title: string } | { hint: string } | { palette: Palette };
+/** The theme categories of the picker. A favorite also stays in its own category. */
+export type ThemeCategoryId = "favorites" | "yours" | "editor" | "photo" | "original";
+export type ThemeCategory = { id: ThemeCategoryId; label: string; blurb: string; empty: string; palettes: Palette[] };
 
 export const OWN_GROUP = "Your palettes";
-export const EDITOR_GROUP = "New · editor classics";
-export const PHOTO_GROUP = "New · from photos";
-export const OTHER_GROUP = "Other themes";
+export const EDITOR_GROUP = "Editor classics";
+export const PHOTO_GROUP = "From photos";
+export const OTHER_GROUP = "Originals";
 
-/** The picker group a palette belongs to, favorites aside. */
-export function groupOf(id: string): string {
+type Home = Exclude<ThemeCategoryId, "favorites">;
+const LABEL: Record<Home, string> = { yours: OWN_GROUP, editor: EDITOR_GROUP, photo: PHOTO_GROUP, original: OTHER_GROUP };
+
+/** The category a palette lives in, favorites aside. */
+export function categoryOf(id: string): Home {
 	const palette = PALETTES.find((p) => p.id === id);
-	if (!palette) return OTHER_GROUP;
-	if (!palette.bundled) return OWN_GROUP;
-	return palette.group === "editor" ? EDITOR_GROUP : palette.group === "photo" ? PHOTO_GROUP : OTHER_GROUP;
+	if (!palette) return "original";
+	if (!palette.bundled) return "yours";
+	return palette.group === "editor" ? "editor" : palette.group === "photo" ? "photo" : "original";
 }
 
-export function groupedPalettes(favorites: ReadonlySet<string>): PaletteRow[] {
-	const own = PALETTES.filter((palette) => groupOf(palette.id) === OWN_GROUP && !favorites.has(palette.id));
-	const groups = [
-		{ title: "Favorites", palettes: PALETTES.filter((palette) => favorites.has(palette.id)) },
-		// Only shown once the person has palettes of their own.
-		...(own.length ? [{ title: OWN_GROUP, palettes: own }] : []),
-		...[EDITOR_GROUP, PHOTO_GROUP, OTHER_GROUP].map((title) => ({
-			title,
-			palettes: PALETTES.filter((palette) => groupOf(palette.id) === title && !favorites.has(palette.id)),
-		})),
+export function groupOf(id: string): string {
+	return LABEL[categoryOf(id)];
+}
+
+export function themeCategories(favorites: ReadonlySet<string>): ThemeCategory[] {
+	const home = (id: Home) => PALETTES.filter((p) => categoryOf(p.id) === id);
+	return [
+		{ id: "favorites", label: "Favorites", blurb: "The palettes you starred", empty: "No favorites yet. Open a category and press f on a palette.", palettes: PALETTES.filter((p) => favorites.has(p.id)) },
+		{ id: "yours", label: OWN_GROUP, blurb: "Your own library, from pi-themes", empty: "No palettes of your own yet. Account → i imports a library from pi-themes.", palettes: home("yours") },
+		{ id: "editor", label: EDITOR_GROUP, blurb: "Inspired by the classic editor themes", empty: "All of them are yours now.", palettes: home("editor") },
+		{ id: "photo", label: PHOTO_GROUP, blurb: "Colors taken from photographs", empty: "All of them are yours now.", palettes: home("photo") },
+		{ id: "original", label: OTHER_GROUP, blurb: "Made for Pi", empty: "All of them are yours now.", palettes: home("original") },
 	];
-	const rows: PaletteRow[] = [];
-	for (const { title, palettes } of groups) {
-		rows.push({ title });
-		if (palettes.length === 0) rows.push({ hint: title === "Favorites" ? "Press f to add one" : "All saved as favorites" });
-		else for (const palette of palettes) rows.push({ palette });
-	}
-	return rows;
-}
-
-export function orderedPalettes(rows: PaletteRow[]): Palette[] {
-	return rows.flatMap((row) => "palette" in row ? [row.palette] : []);
 }

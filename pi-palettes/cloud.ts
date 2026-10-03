@@ -12,7 +12,7 @@ import { DATA_DIR, parseLibrary, writePrivate, type Library } from "./library.ts
 export const SITE = (process.env.PI_THEMES_URL ?? "https://palette.prjct.app").replace(/\/+$/, "");
 export const AUTH_PATH = join(DATA_DIR, "auth.json");
 const TIMEOUT_MS = 15_000;
-const VERSION = "0.4.0";
+const VERSION = "0.4.1";
 
 export type Auth = { token: string; username?: string; site: string; connectedAt: string };
 

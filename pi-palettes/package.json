@@ -1,6 +1,6 @@
 {
   "name": "@prjct.app/pi-palette",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "34 Pi color themes as data: live preview, favorites, synced sessions, weekly versioned backups, and your own library from pi-themes by file or optional account sync.",
   "type": "module",
   "license": "MIT",

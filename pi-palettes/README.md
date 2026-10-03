@@ -16,7 +16,7 @@ Reload Pi to discover the themes.
 
 ## Use
 
-- `/palette` opens the interactive picker and previews the selected palette.
+- `/palette` opens the picker. Categories on the left (Favorites, Your palettes, Editor classics, From photos, Originals, Backups, Account); the highlighted category's list on the right. `→` opens a category: its list moves left and the selected item's details show on the right, with a live preview for palettes. Each category brings its own keys: `f` favorite and `a` apply for palettes, `b` back up now and `r` restore for backups, `s` sync, `l` log in/out, `i` import and `e` export for the account.
 - `/palette <id>` applies a named palette, for example `/palette nord`.
 - `/palette next`, `/palette prev`, and `/palette random` change palettes directly.
 
@@ -55,7 +55,7 @@ Every time Pi starts, the extension checks whether a week has passed since the l
 The mode line shows the state, for example `palette backup 2d ago · 7 local · 7 cloud` (`cloud ✕` when the last cloud attempt failed).
 
 - `/palette backup` backs up now, whatever the weekly clock says.
-- `/palette backups` lists every version, here and on pi-themes. `b` backs up now; `r` (pressed twice) restores the selected version, after saving your current library as a version of its own so the restore can be undone.
+- `/palette backups` opens the picker on Backups: every version, here and on pi-themes. `b` backs up now; `r` (pressed twice) restores the selected version, after saving your current library as a version of its own so the restore can be undone.
 
 ### Library format
 

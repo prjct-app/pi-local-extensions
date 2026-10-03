@@ -7,31 +7,31 @@ import test from "node:test";
 // Keep the real ~/.pi/agent (and any library in it) out of the test.
 process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-palette-agent-"));
 const { readFavorites, toggleFavorite } = await import("./favorites.ts");
-const { groupedPalettes, orderedPalettes } = await import("./palette-groups.ts");
+const { themeCategories } = await import("./palette-groups.ts");
 const { PALETTES } = await import("./palettes.ts");
 
-function names(favorites: ReadonlySet<string>): string[] {
-	return groupedPalettes(favorites).flatMap((row) => "title" in row ? [row.title] : []);
-}
+const ids = (favorites: ReadonlySet<string>, id: string) => themeCategories(favorites).find((c) => c.id === id)!.palettes.map((p) => p.id);
 
-test("new editor and photo themes appear separately, without duplicates", () => {
-	const rows = groupedPalettes(new Set());
-	assert.deepEqual(names(new Set()), ["Favorites", "New · editor classics", "New · from photos", "Other themes"]);
-	assert.ok(rows.some((row) => "hint" in row && row.hint === "Press f to add one"));
-	assert.deepEqual(orderedPalettes(rows).slice(9, 17).map((palette) => palette.id),
-		["glacier", "ember", "iris", "hearth", "atelier", "bloom", "tidepool", "orchard"]);
-	assert.equal(new Set(orderedPalettes(rows).map((palette) => palette.id)).size, PALETTES.length);
+test("every palette lives in exactly one category; favorites are a view on top", () => {
+	const categories = themeCategories(new Set());
+	assert.deepEqual(categories.map((c) => c.label), ["Favorites", "Your palettes", "Editor classics", "From photos", "Originals"]);
+	assert.deepEqual(ids(new Set(), "favorites"), []);
+	assert.match(categories[0]!.empty, /press f/);
+	assert.deepEqual(ids(new Set(), "photo"), ["glacier", "ember", "iris", "hearth", "atelier", "bloom", "tidepool", "orchard"]);
+	const homes = categories.filter((c) => c.id !== "favorites").flatMap((c) => c.palettes.map((p) => p.id));
+	assert.equal(homes.length, PALETTES.length);
+	assert.equal(new Set(homes).size, PALETTES.length);
 });
 
-test("favorites move to the first section and survive reload", () => {
+test("favorites show in their own category, stay in theirs, and survive reload", () => {
 	const directory = mkdtempSync(join(tmpdir(), "pi-palette-favorites-"));
 	const path = join(directory, "nested", "favorites.json");
 	try {
 		assert.deepEqual([...readFavorites(path)], []);
 		let favorites = toggleFavorite("orchard", path);
 		favorites = toggleFavorite("tensor", path);
-		assert.deepEqual(names(favorites), ["Favorites", "New · editor classics", "New · from photos", "Other themes"]);
-		assert.deepEqual(orderedPalettes(groupedPalettes(favorites)).slice(0, 2).map((palette) => palette.id), ["tensor", "orchard"]);
+		assert.deepEqual(ids(favorites, "favorites"), ["tensor", "orchard"]);
+		assert.ok(ids(favorites, "photo").includes("orchard"));
 		assert.deepEqual([...readFavorites(path)], ["orchard", "tensor"]);
 		favorites = toggleFavorite("orchard", path);
 		assert.deepEqual([...favorites], ["tensor"]);

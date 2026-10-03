@@ -14,7 +14,7 @@ writeFileSync(join(agent, "pi-palette", "library.json"), JSON.stringify({
 	palettes: [{ id: "sunrise", label: "Sunrise", vars }, { id: "dracula", label: "My Dracula", vars }],
 }));
 
-const { OWN_GROUP, groupedPalettes, groupOf } = await import("./palette-groups.ts");
+const { OWN_GROUP, themeCategories, groupOf } = await import("./palette-groups.ts");
 const { BUNDLED_IDS, findPalette, PALETTES } = await import("./palettes.ts");
 
 test("your own palettes get their own group and override bundled ones", () => {
@@ -24,6 +24,8 @@ test("your own palettes get their own group and override bundled ones", () => {
 	assert.equal(groupOf("sunrise"), OWN_GROUP);
 	assert.equal(groupOf("dracula"), OWN_GROUP);
 	assert.equal(BUNDLED_IDS.includes("sunrise"), false);
-	const titles = groupedPalettes(new Set()).flatMap((row) => "title" in row ? [row.title] : []);
-	assert.deepEqual(titles, ["Favorites", OWN_GROUP, "New · editor classics", "New · from photos", "Other themes"]);
+	const yours = themeCategories(new Set()).find((c) => c.id === "yours")!;
+	assert.equal(yours.label, OWN_GROUP);
+	assert.deepEqual(yours.palettes.map((p) => p.id), ["dracula", "sunrise"].sort((a, b) => PALETTES.findIndex((p) => p.id === a) - PALETTES.findIndex((p) => p.id === b)));
+	assert.equal(themeCategories(new Set()).find((c) => c.id === "editor")!.palettes.some((p) => p.id === "dracula"), false);
 });

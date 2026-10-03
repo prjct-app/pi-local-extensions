@@ -3,9 +3,9 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { brand, completer, openPanel, setFact, type Tone } from "@prjct.app/pi-tui-kit";
+import { brand, completer, setFact, type Tone } from "@prjct.app/pi-tui-kit";
 import { isDue, KEEP, listVersions, readState, readVersion, runBackup, saveBeforeRestore, type BackupReason } from "./backup.ts";
-import { backupPanel, FACT, factText, when } from "./backup-ui.ts";
+import { FACT, factText, nextCheck, when } from "./backup-ui.ts";
 import {
 	assertSecureSite,
 	claimLink,
@@ -38,7 +38,7 @@ import {
 	type Library,
 } from "./library.ts";
 import { findPalette, LIBRARY_ERROR, PALETTE_IDS, PALETTES, resolvePaletteArg } from "./palettes.ts";
-import { openPalettePanels } from "./palette-panel.ts";
+import { openPalettePanels, type CategoryId, type PickerHost, type PickerInfo } from "./palette-panel.ts";
 import { watchActiveTheme, writeActiveTheme } from "./sync.ts";
 
 /** A palette to apply right after the next reload (set by import and sync). */
@@ -84,9 +84,57 @@ function cyclePalette(ctx: ExtensionContext, step: number): void {
 	applyPalette(ctx, PALETTE_IDS[nextIndex]!);
 }
 
-async function pickPalette(ctx: ExtensionContext): Promise<void> {
-	const applied = await openPalettePanels(ctx);
-	if (applied) publishPalette(ctx, applied);
+/** Account and backup state for the picker's details pane. */
+function pickerInfo(): PickerInfo {
+	const auth = readAuth();
+	const state = readState();
+	const account = auth
+		? `${auth.username ? `@${auth.username}` : "Connected"} on ${SITE.replace(/^https?:\/\//, "")}`
+		: "Not connected: backups stay on this computer";
+	const backups = factText(state, listVersions().length, Boolean(auth), backupRunning).replace(/^palette backup /, "");
+	return { connected: Boolean(auth), account, backups: `${backups} · next check ${nextCheck(state)}` };
+}
+
+/** What the picker reads and runs: backups here and on pi-themes, account state. */
+function pickerHost(ctx: ExtensionContext): PickerHost {
+	let cloud: CloudVersion[] = [];
+	let problem: string | undefined;
+	return {
+		info: pickerInfo,
+		backups: () => {
+			const local = listVersions();
+			const parts = [`${local.length}/${KEEP} local`];
+			if (readAuth()) parts.push(problem ? `cloud: ${problem}` : `${cloud.length}/${KEEP} cloud`);
+			parts.push(`next check ${nextCheck(readState())}`);
+			return { local, cloud, cloudProblem: problem, summary: parts.join(" · ") };
+		},
+		readBackup: (file) => readVersion(file),
+		refreshCloud: async () => {
+			const auth = readAuth();
+			if (!auth) { cloud = []; problem = undefined; return; }
+			try {
+				cloud = await listBackups(auth.token);
+				problem = undefined;
+			} catch (error) {
+				problem = cloudProblem(error);
+			}
+		},
+		backupNow: () => backup(ctx, "manual"),
+		site: SITE.replace(/^https?:\/\//, ""),
+	};
+}
+
+async function pickPalette(ctx: ExtensionCommandContext, initial?: CategoryId): Promise<void> {
+	const result = await openPalettePanels(ctx, pickerHost(ctx), initial);
+	if (result?.apply) publishPalette(ctx, result.apply);
+	if (result?.restore) return restore(ctx, result.restore);
+	switch (result?.action) {
+		case "sync": return readAuth() ? sync(ctx) : login(ctx);
+		case "login": return login(ctx);
+		case "logout": return logout(ctx);
+		case "import": return importLibrary(ctx, "");
+		case "export": return exportLibrary(ctx, "");
+	}
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -353,33 +401,7 @@ async function restore(ctx: ExtensionCommandContext, id: string): Promise<void> 
 }
 
 async function browseBackups(ctx: ExtensionCommandContext): Promise<void> {
-	const auth = readAuth();
-	let cloud: CloudVersion[] = [];
-	let problem: string | undefined;
-	const loadCloud = async () => {
-		if (!auth) return;
-		try {
-			cloud = await listBackups(auth.token);
-			problem = undefined;
-		} catch (error) {
-			problem = cloudProblem(error);
-		}
-	};
-	await loadCloud();
-	let chosen: string | undefined;
-	await openPanel(ctx, backupPanel({
-		connected: Boolean(auth),
-		cloud: () => cloud,
-		cloudProblem: () => problem,
-		backupNow: async () => {
-			const outcome = await backup(ctx, "manual");
-			await loadCloud();
-			return outcome;
-		},
-		restore: (id) => { chosen = id; },
-		site: SITE,
-	}));
-	if (chosen) await restore(ctx, chosen);
+	await pickPalette(ctx, "backups");
 }
 
 export default function paletteThemes(pi: ExtensionAPI) {
