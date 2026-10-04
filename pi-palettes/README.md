@@ -52,7 +52,7 @@ Every time Pi starts, the extension checks whether a week has passed since the l
 - A version identical to the newest one is not saved again, so ten unchanged weeks never push out your history.
 - If the cloud cannot be reached, the local backup still happens and you are told why the cloud part failed.
 
-The mode line shows the state, for example `palette backup 2d ago · 7 local · 7 cloud` (`cloud ✕` when the last cloud attempt failed).
+The `/palette` picker shows the backup state and next weekly check under Account and Backups. Palette does not add a permanent status to the composer.
 
 - `/palette backup` backs up now, whatever the weekly clock says.
 - `/palette backups` opens the picker on Backups: every version, here and on pi-themes. `b` backs up now; `r` (pressed twice) restores the selected version, after saving your current library as a version of its own so the restore can be undone.

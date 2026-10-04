@@ -168,7 +168,7 @@ test("versions stay in order when the clock goes back, and only backup files are
 	}
 });
 
-test("the weekly clock and the line on the mode line", () => {
+test("the weekly clock and the picker's backup summary", () => {
 	const now = Date.UTC(2026, 9, 10);
 	assert.equal(isDue({}, now), true);
 	assert.equal(isDue({ checkedAt: now - 6 * 24 * 3_600_000 }, now), false);

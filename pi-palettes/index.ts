@@ -292,7 +292,6 @@ async function logout(ctx: ExtensionContext): Promise<void> {
 	}
 	try { await revokeToken(auth.token); } catch { /* removed locally either way; it can also be revoked on the site */ }
 	forgetAuth();
-	showBackupFact(ctx);
 	ctx.ui.notify("Disconnected. Your palettes and their backups stay on this computer.", "info");
 }
 
@@ -311,10 +310,6 @@ function safely(fn: () => void): void {
 }
 
 let backupRunning = false;
-
-function showBackupFact(ctx: ExtensionContext): void {
-	safely(() => setFact(ctx, FACT, factText(readState(), listVersions().length, Boolean(readAuth()), backupRunning)));
-}
 
 function cloudProblem(error: unknown): string {
 	if (isNotFound(error)) return `${SITE} does not keep backups yet`;
@@ -338,7 +333,6 @@ type Outcome = { text: string; tone: Tone };
 async function backup(ctx: ExtensionContext, reason: BackupReason): Promise<Outcome> {
 	if (backupRunning) return { text: "A backup is already running.", tone: "muted" };
 	backupRunning = true;
-	showBackupFact(ctx);
 	try {
 		const auth = readAuth();
 		const client = `Pi · ${platform()}`;
@@ -365,7 +359,6 @@ async function backup(ctx: ExtensionContext, reason: BackupReason): Promise<Outc
 		return { text: `Palette backup failed: ${message(error)}`, tone: "error" };
 	} finally {
 		backupRunning = false;
-		showBackupFact(ctx);
 	}
 }
 
@@ -420,6 +413,8 @@ export default function paletteThemes(pi: ExtensionAPI) {
 		stopThemeSync?.();
 		stopThemeSync = undefined;
 		if (!ctx.hasUI) return;
+		// Clear the composer status left by an older build after /reload.
+		setFact(ctx, FACT, undefined);
 		if (LIBRARY_ERROR) ctx.ui.notify(LIBRARY_ERROR, "warning");
 
 		if (existsSync(PENDING_PATH)) {
@@ -439,7 +434,6 @@ export default function paletteThemes(pi: ExtensionAPI) {
 		});
 
 		// The weekly backup: checked on every start, run at most once a week, in the background.
-		showBackupFact(ctx);
 		if (isDue(readState())) {
 			void backup(ctx, "weekly").then(({ text, tone }) => {
 				if (tone === "warning" || tone === "error") safely(() => ctx.ui.notify(text, NOTIFY[tone]));
@@ -504,4 +498,3 @@ export default function paletteThemes(pi: ExtensionAPI) {
 		},
 	});
 }
-

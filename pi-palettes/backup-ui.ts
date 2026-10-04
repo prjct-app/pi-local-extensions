@@ -1,7 +1,7 @@
 import { ago } from "@prjct.app/pi-tui-kit";
 import { WEEK_MS, type BackupReason, type BackupState } from "./backup.ts";
 
-/** The fact name on the shared mode line. */
+/** Legacy composer fact, cleared on startup when reloading an older build. */
 export const FACT = "palette-backup";
 
 /** "in 5d", "in 3h", "now": when the weekly check runs next. */
@@ -13,7 +13,7 @@ export function nextCheck(state: BackupState, now = Date.now()): string {
 	return hours < 48 ? `in ${hours}h` : `in ${Math.ceil(hours / 24)}d`;
 }
 
-/** The short line on the mode line: when the last backup ran and what each side keeps. */
+/** The picker's backup summary: when the last backup ran and what each side keeps. */
 export function factText(state: BackupState, localCount: number, connected: boolean, running: boolean, now = Date.now()): string {
 	if (running) return "palette backup…";
 	if (state.checkedAt === undefined) return "palette backup pending";
