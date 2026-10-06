@@ -1,119 +1,92 @@
 #!/usr/bin/env node
-/**
- * What each extension costs Pi to carry: startup time (all extensions, then
- * each one left out), idle CPU, disk it writes, and build size.
- *
- *   node scripts/audit/perf.mjs [--runs 3] [--idle 60] [--out file.json]
- *
- * Startup runs `pi --mode rpc --no-session` in a scratch agent dir whose
- * settings list a chosen set of packages, and times spawn → first command
- * list. No model is called and no session is written.
- */
+/** Offline, isolated RPC startup and idle measurement. No model requests. */
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, statSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { installedPackage, isolatedEnvironment, scratch } from './perf-support.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
 const runs = Number(flag('--runs', '3'));
-const idleSeconds = Number(flag('--idle', '60'));
-const out = flag('--out');
+const idleSeconds = Number(flag('--idle', '10'));
+if (!Number.isInteger(runs) || runs < 1 || runs > 20 || !Number.isFinite(idleSeconds) || idleSeconds < 0 || idleSeconds > 60) {
+  throw new Error('Use --runs 1..20 and --idle 0..60.');
+}
 const agentDir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
-const settings = JSON.parse(readFileSync(join(agentDir, 'settings.json'), 'utf8'));
-// Absolute paths: Pi caches each extension's load by path, and a relative path
-// under a fresh scratch dir would be a cache miss on every run.
-const packages = (settings.packages ?? []).map(pkg => (pkg.startsWith('/') ? pkg : join(agentDir, pkg)));
-const short = pkg => pkg.replace(`${agentDir}/`, '');
+const settings = JSON.parse(readFileSync(flag('--settings', join(agentDir, 'settings.json')), 'utf8'));
+const packages = (settings.packages ?? []).map(entry => installedPackage(entry, agentDir));
+const source = entry => typeof entry === 'string' ? entry : entry.source;
+const allOnly = args.includes('--all-only');
 
-/** A scratch agent dir: everything linked from the real one, settings rewritten. */
-function scratch(keep) {
-  const dir = mkdtempSync(join(tmpdir(), 'pi-audit-agent-'));
-  for (const name of readdirSync(agentDir)) {
-    if (name === 'settings.json' || name === 'sessions') continue;
-    symlinkSync(join(agentDir, name), join(dir, name));
-  }
-  writeFileSync(join(dir, 'settings.json'), JSON.stringify({ ...settings, packages: keep }));
-  return dir;
-}
-
-/** ms from spawn to the RPC answer listing commands, and the child's CPU seconds. */
-function startup(keep, idle = 0) {
-  return new Promise(resolve => {
-    const dir = scratch(keep);
-    const started = process.hrtime.bigint();
-    const child = spawn('pi', ['--mode', 'rpc', '--no-session'], { cwd: tmpdir(), env: { ...process.env, PI_CODING_AGENT_DIR: dir, PI_TRACE_PAYLOADS: 'off', PI_TRACE_DIR: join(dir, 'trace') }, stdio: ['pipe', 'pipe', 'ignore'] });
-    let buffer = '';
-    let ready;
-    const finish = cpu => {
-      child.once('exit', () => {
-        try { rmSync(dir, { recursive: true, force: true }); } catch { /* the child may still be flushing; the dir is in tmp */ }
-        resolve({ ms: ready, cpu });
+async function startup(keep, idle = 0) {
+  const dir = scratch(keep);
+  try {
+    return await new Promise((resolve, reject) => {
+      const started = process.hrtime.bigint();
+      const child = spawn('pi', ['--mode', 'rpc', '--no-session', '--no-skills', '--no-prompt-templates', '--no-context-files'], {
+        cwd: join(dir, 'workspace'), env: isolatedEnvironment(dir), stdio: ['pipe', 'pipe', 'pipe'],
       });
-      child.kill('SIGTERM');
-    };
-    const cpuSeconds = () => {
-      try {
-        const time = execFileSync('ps', ['-o', 'time=', '-p', String(child.pid)], { encoding: 'utf8' }).trim();
-        const [m, s] = time.split(':');
-        return Number(m) * 60 + Number(s);
-      } catch { return NaN; }
-    };
-    child.stdout.on('data', chunk => {
-      buffer += chunk;
-      if (ready === undefined && buffer.includes('"type":"response"')) {
-        ready = Number(process.hrtime.bigint() - started) / 1e6;
-        if (!idle) finish(undefined);
-        else {
-          const before = cpuSeconds();
-          setTimeout(() => finish(cpuSeconds() - before), idle * 1000);
+      let buffer = '', stderr = '', ready, cpu, finishing = false, error;
+      const timers = [];
+      const stop = failure => {
+        if (finishing) return;
+        finishing = true; error = failure;
+        child.kill('SIGTERM');
+        timers.push(setTimeout(() => child.kill('SIGKILL'), 2_000));
+      };
+      const cpuSeconds = () => {
+        const text = execFileSync('ps', ['-o', 'time=', '-p', String(child.pid)], { encoding: 'utf8' }).trim();
+        return text.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0);
+      };
+      child.once('error', failure => { timers.forEach(clearTimeout); reject(failure); });
+      child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-16_000); });
+      child.stdin.on('error', failure => stop(failure));
+      child.once('close', (code, signal) => {
+        timers.forEach(clearTimeout);
+        if (error || ready === undefined || /Failed to load extension|Cannot find module|ERR_MODULE_NOT_FOUND|Extension.*(?:failed|error)/i.test(stderr)) {
+          reject(error ?? new Error(`Pi did not load cleanly (${code ?? signal}): ${stderr.slice(-2000)}`));
+        } else resolve({ ms: ready, ...(cpu === undefined ? {} : { cpu }), stderr });
+      });
+      child.stdout.on('data', chunk => {
+        buffer += chunk;
+        const lines = buffer.split('\n'); buffer = lines.pop();
+        for (const line of lines) {
+          let event; try { event = JSON.parse(line); } catch { continue; }
+          if (event.type === 'extension_error') { stop(new Error(JSON.stringify(event))); continue; }
+          if (ready !== undefined || event.type !== 'response' || event.id !== 'audit-commands') continue;
+          if (event.success === false) { stop(new Error(JSON.stringify(event))); continue; }
+          ready = Number(process.hrtime.bigint() - started) / 1e6;
+          if (!idle) { stop(); continue; }
+          try {
+            const before = cpuSeconds();
+            timers.push(setTimeout(() => {
+              try { cpu = cpuSeconds() - before; stop(); } catch (failure) { stop(failure); }
+            }, idle * 1000));
+          } catch (failure) { stop(failure); }
         }
-      }
+      });
+      timers.push(setTimeout(() => stop(new Error('Pi RPC startup timed out')), 30_000 + idle * 1000));
+      child.stdin.write(`${JSON.stringify({ id: 'audit-commands', type: 'get_commands' })}\n`);
     });
-    child.stdin.write(`${JSON.stringify({ id: '1', type: 'get_commands' })}\n`);
-    setTimeout(() => { if (ready === undefined) { ready = NaN; finish(undefined); } }, 60_000);
-  });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-const median = values => { const s = values.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
-
-const report = { runs, startup: {}, idle: {}, disk: {}, builds: {} };
-// Rounds interleave every configuration, so load and cache drift hit all of them alike;
-// each extension is timed alone against the same round's bare Pi.
-console.log(`startup · ${runs} interleaved rounds · ${packages.length} packages`);
-const samples = { none: [], all: [], alone: Object.fromEntries(packages.map(pkg => [pkg, []])) };
-// One unmeasured pass warms Pi's per-path load cache, the state of every start after the first.
-for (const keep of [[], packages, ...packages.map(pkg => [pkg])]) await startup(keep);
+const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const configurations = { bare: [], all: packages, ...(allOnly ? {} : Object.fromEntries(packages.map(entry => [source(entry), [entry]]))) };
+const samples = Object.fromEntries(Object.keys(configurations).map(name => [name, []]));
+const first = {};
+for (const [name, keep] of Object.entries(configurations)) first[name] = (await startup(keep)).ms;
 for (let round = 0; round < runs; round++) {
-  const none = (await startup([])).ms;
-  samples.none.push(none);
-  samples.all.push((await startup(packages)).ms - none);
-  for (const pkg of packages) samples.alone[pkg].push((await startup([pkg])).ms - none);
+  for (const [name, keep] of Object.entries(configurations)) {
+    const sample = await startup(keep); samples[name].push(sample.ms);
+    console.log(JSON.stringify({ round: round + 1, configuration: name, ms: Math.round(sample.ms) }));
+  }
 }
-report.startup.none = median(samples.none);
-report.startup.all = median(samples.all);
-report.startup.alone = Object.fromEntries(packages.map(pkg => [pkg, median(samples.alone[pkg])]));
-console.log(`  bare Pi ${report.startup.none.toFixed(0)} ms · all extensions add ${report.startup.all.toFixed(0)} ms`);
-for (const [pkg, cost] of Object.entries(report.startup.alone).sort((a, b) => b[1] - a[1])) console.log(`  ${short(pkg).padEnd(28)} ${cost.toFixed(0).padStart(6)} ms alone`);
-
-console.log(`idle CPU over ${idleSeconds}s after startup`);
-for (const [label, keep] of [['none', []], ['all', packages]]) {
-  const { cpu } = await startup(keep, idleSeconds);
-  report.idle[label] = cpu;
-  console.log(`  ${label.padEnd(6)} ${cpu.toFixed(2)} CPU-s (${(100 * cpu / idleSeconds).toFixed(1)}% of a core)`);
-}
-
-const du = path => { try { return Number(execFileSync('du', ['-sk', path], { encoding: 'utf8' }).split('\t')[0]) * 1024; } catch { return 0; } };
-const prjct = process.env.PRJCT_HOME || join(homedir(), '.prjct');
-for (const [label, path] of [['pi-trace-logger (~/Desktop/pi-logs)', join(homedir(), 'Desktop', 'pi-logs')], ['pi sessions', join(agentDir, 'sessions')],
-  ...readdirSync(prjct).filter(name => { try { return statSync(join(prjct, name)).isDirectory(); } catch { return false; } }).map(name => [`~/.prjct/${name}`, join(prjct, name)])]) {
-  report.disk[label] = du(path);
-}
-console.log('disk');
-for (const [label, bytes] of Object.entries(report.disk).sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`  ${label.padEnd(40)} ${(bytes / 1e9).toFixed(2)} GB`);
-console.log('builds');
-for (const pkg of packages) {
-  report.builds[short(pkg)] = du(pkg);
-}
-for (const [pkg, bytes] of Object.entries(report.builds).sort((a, b) => b[1] - a[1])) console.log(`  ${pkg.padEnd(28)} ${(bytes / 1e6).toFixed(1)} MB`);
+const idle = {};
+if (idleSeconds) for (const name of ['bare', 'all']) idle[name] = (await startup(configurations[name], idleSeconds)).cpu;
+const report = { at: new Date().toISOString(), node: process.version, runs, idleSeconds, packages: packages.map(source),
+  firstStartMs: first, samplesMs: samples, medianMs: Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, median(values)])), idleCpuSeconds: idle };
+const out = flag('--out');
 if (out) writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+console.log(JSON.stringify(report, null, 2));

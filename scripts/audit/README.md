@@ -20,4 +20,11 @@ node scripts/audit/perf.mjs --runs 5 --idle 60 --out ~/.prjct/audit/<date>/perf.
 
 Every tool and message type is attributed through `owners.mjs`. Add new ones there when they ship.
 
-Startup is measured warm (a fixed path, Pi's load cache hit) and cold (the first start after a rebuild). Each extension is timed alone against bare Pi in the same round, so load drift hits every configuration alike.
+Startup records the first observed start separately, then interleaves bare Pi,
+the complete set, and individual packages. These are observed timings, not a
+guaranteed cold-cache benchmark. `--all-only` omits individual-package samples.
+`--settings <file>` measures another package list, including compiled local builds.
+Installed `npm:` references resolve locally; missing packages and load failures
+fail the measurement. Each run uses empty temporary state, without linking real
+credentials, sessions, caches, or extension databases. Idle sampling is capped
+at 60 seconds. The output includes raw samples and medians.
